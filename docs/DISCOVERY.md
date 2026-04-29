@@ -116,6 +116,22 @@ Add entries in this format:
 **Recommendation:** Use a lightweight local watcher script during discovery. Revisit full Xcode or a richer dev runner only if the prototype grows beyond SwiftPM ergonomics.
 **Carry forward:** Yes.
 
+### 2026-04-29 - Word Hover And Selection Need Reserved Space
+
+**Area:** UI
+**Observed:** Product feedback requested subtle hover styling and blue selected styling without moving the sentence layout.
+**Why it matters:** If hover or selection changes word size, the original sentence shifts while the user is reading it.
+**Recommendation:** Reserve padding and background bounds in every word state. Use transparent background normally, a subtle accent tint on hover, and accent blue with white text for selected words.
+**Carry forward:** Yes.
+
+### 2026-04-29 - Ollama Is A Good First Real AI Provider
+
+**Area:** AI
+**Observed:** Product direction favors starting with Ollama for privacy. The prototype can check `http://localhost:11434/api/tags`, list local models, persist the selected model, and call `POST /api/generate` with `stream: false`.
+**Why it matters:** Local AI lets us test real explanation latency and quality without sending user text to a cloud provider during discovery.
+**Recommendation:** Keep Ollama as the first provider path. If Ollama is unavailable, show a clear local status message instead of failing silently.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

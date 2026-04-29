@@ -55,3 +55,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** The original text interaction needs inline-block style behavior, not equal-width adaptive grid cells.
 **Next step:** Relaunch the prototype and verify the original sentence reads naturally while individual words remain clickable.
+
+## 2026-04-29 - Added Word States And Ollama Settings
+
+**Task:** TASK-003
+**Summary:** Polished the empty explanation pane, added stable hover and selected styles for clickable words, and added an Ollama settings tab with model discovery, persisted model selection, and non-streaming local generation.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Use Ollama first for private local AI discovery. Use macOS accent color for selected word styling and reserve word padding in every state to avoid layout shifts.
+**Next step:** Run the prototype with and without Ollama running to compare local AI behavior and fallback status messaging.

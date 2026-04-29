@@ -1,22 +1,40 @@
 import AppKit
 import Carbon
+import Foundation
 import SwiftUI
 
+@MainActor
 final class DiscoveryStore: ObservableObject {
     @Published var capturedText: String
     @Published var selectedPhrase: PhraseExplanation?
+    @Published var selectedTokenID: Int?
     @Published var savedPhrases: [PhraseExplanation]
     @Published var composerInput: String
     @Published var composerOutputs: ComposerOutputs
+    @Published var ollamaModels: [String]
+    @Published var selectedOllamaModel: String
+    @Published var ollamaStatusMessage: String
+    @Published var isCheckingOllama: Bool
+    @Published var isGeneratingAI: Bool
+    @Published var aiExplanation: String?
+
+    private let selectedModelKey = "ContextDiscovery.SelectedOllamaModel"
 
     init(capturedText: String) {
         self.capturedText = capturedText
         self.selectedPhrase = nil
+        self.selectedTokenID = nil
         self.savedPhrases = [PhraseExplanation.sampleLearningItem]
         self.composerInput = "damit wir uns spaeter keine Steine in den Weg legen"
         self.composerOutputs = ComposerOutputs.generate(
             from: "damit wir uns spaeter keine Steine in den Weg legen"
         )
+        self.ollamaModels = []
+        self.selectedOllamaModel = UserDefaults.standard.string(forKey: selectedModelKey) ?? ""
+        self.ollamaStatusMessage = "Ollama has not been checked yet."
+        self.isCheckingOllama = false
+        self.isGeneratingAI = false
+        self.aiExplanation = nil
     }
 
     var translatedText: String {
@@ -26,6 +44,8 @@ final class DiscoveryStore: ObservableObject {
     func replaceCapturedText(_ text: String) {
         capturedText = text.isEmpty ? StubTranslator.defaultSourceText : text
         selectedPhrase = nil
+        selectedTokenID = nil
+        aiExplanation = nil
     }
 
     var wordTokens: [WordToken] {
@@ -33,7 +53,15 @@ final class DiscoveryStore: ObservableObject {
     }
 
     func selectWord(_ token: WordToken) {
+        selectedTokenID = token.id
+        aiExplanation = nil
         selectedPhrase = PhraseExplanation.explain(word: token.normalized, visibleWord: token.text, context: capturedText)
+
+        if !selectedOllamaModel.isEmpty {
+            Task {
+                await generateAIExplanation(for: token)
+            }
+        }
     }
 
     func saveSelectedPhrase() {
@@ -49,17 +77,115 @@ final class DiscoveryStore: ObservableObject {
     func compose() {
         composerOutputs = ComposerOutputs.generate(from: composerInput)
     }
+
+    func selectOllamaModel(_ model: String) {
+        selectedOllamaModel = model
+        UserDefaults.standard.set(model, forKey: selectedModelKey)
+    }
+
+    func refreshOllamaModels() async {
+        isCheckingOllama = true
+        defer { isCheckingOllama = false }
+
+        guard let url = URL(string: "http://localhost:11434/api/tags") else {
+            ollamaStatusMessage = "Ollama URL is invalid."
+            return
+        }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                ollamaModels = []
+                ollamaStatusMessage = "Ollama responded unexpectedly. Check that the local server is healthy."
+                return
+            }
+
+            let tags = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
+            let models = tags.models.map(\.name).sorted()
+            ollamaModels = models
+
+            if models.isEmpty {
+                selectedOllamaModel = ""
+                ollamaStatusMessage = "Ollama is running, but no local models were found."
+            } else {
+                if !models.contains(selectedOllamaModel) {
+                    selectOllamaModel(models[0])
+                }
+                ollamaStatusMessage = "Ollama is running. \(models.count) local model\(models.count == 1 ? "" : "s") available."
+            }
+        } catch {
+            ollamaModels = []
+            ollamaStatusMessage = "Ollama is not running at localhost:11434."
+        }
+    }
+
+    func generateAIExplanation(for token: WordToken) async {
+        guard !selectedOllamaModel.isEmpty else {
+            aiExplanation = "Choose a local Ollama model in Settings to use real AI responses."
+            return
+        }
+
+        isGeneratingAI = true
+        defer { isGeneratingAI = false }
+
+        guard let url = URL(string: "http://localhost:11434/api/generate") else {
+            aiExplanation = "Ollama URL is invalid."
+            return
+        }
+
+        let prompt = """
+        You are helping a German-speaking professional understand English.
+        Explain the selected word in concise, practical language.
+
+        Original sentence:
+        \(capturedText)
+
+        Selected word:
+        \(token.text)
+
+        Return:
+        - Meaning
+        - Meaning in this exact context
+        - Tone/formality
+        - One natural example sentence
+        """
+
+        let requestBody = OllamaGenerateRequest(
+            model: selectedOllamaModel,
+            prompt: prompt,
+            stream: false
+        )
+
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(requestBody)
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                aiExplanation = "Ollama did not return a usable response."
+                return
+            }
+
+            let result = try JSONDecoder().decode(OllamaGenerateResponse.self, from: data)
+            aiExplanation = result.response.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            aiExplanation = "Could not reach Ollama. Start Ollama, then refresh models in Settings."
+        }
+    }
 }
 
 struct WordToken: Identifiable {
-    let id = UUID()
+    let id: Int
     let text: String
     let normalized: String
 
     static func tokenize(_ text: String) -> [WordToken] {
         text.split(whereSeparator: { $0.isWhitespace })
             .map(String.init)
-            .compactMap { raw in
+            .enumerated()
+            .compactMap { index, raw in
                 let normalized = raw
                     .trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
                     .lowercased()
@@ -68,9 +194,27 @@ struct WordToken: Identifiable {
                     return nil
                 }
 
-                return WordToken(text: raw, normalized: normalized)
+                return WordToken(id: index, text: raw, normalized: normalized)
             }
     }
+}
+
+struct OllamaTagsResponse: Decodable {
+    let models: [OllamaModelInfo]
+}
+
+struct OllamaModelInfo: Decodable {
+    let name: String
+}
+
+struct OllamaGenerateRequest: Encodable {
+    let model: String
+    let prompt: String
+    let stream: Bool
+}
+
+struct OllamaGenerateResponse: Decodable {
+    let response: String
 }
 
 struct PhraseExplanation: Identifiable, Equatable {
@@ -211,10 +355,15 @@ struct AssistantView: View {
                 ComposerView(store: store)
             case .review:
                 ReviewView(store: store)
+            case .settings:
+                SettingsView(store: store)
             }
         }
         .frame(width: 680, height: 560)
         .background(Color(nsColor: .windowBackgroundColor))
+        .task {
+            await store.refreshOllamaModels()
+        }
     }
 
     private var header: some View {
@@ -241,6 +390,7 @@ enum PrototypeTab: String, CaseIterable, Identifiable {
     case explain
     case composer
     case review
+    case settings
 
     var id: String { rawValue }
 
@@ -249,6 +399,7 @@ enum PrototypeTab: String, CaseIterable, Identifiable {
         case .explain: return "Explain"
         case .composer: return "Composer"
         case .review: return "Review"
+        case .settings: return "Settings"
         }
     }
 }
@@ -296,7 +447,10 @@ struct ClickableOriginalText: View {
         VStack(alignment: .leading, spacing: 7) {
             Text("Original")
                 .font(.headline)
-            WrappingWords(tokens: store.wordTokens) { token in
+            WrappingWords(
+                tokens: store.wordTokens,
+                selectedTokenID: store.selectedTokenID
+            ) { token in
                 store.selectWord(token)
             }
             .padding(12)
@@ -309,25 +463,54 @@ struct ClickableOriginalText: View {
 
 struct WrappingWords: View {
     let tokens: [WordToken]
+    let selectedTokenID: Int?
     let onSelect: (WordToken) -> Void
 
     var body: some View {
-        WordWrapLayout(horizontalSpacing: 6, verticalSpacing: 6) {
+        WordWrapLayout(horizontalSpacing: 3, verticalSpacing: 3) {
             ForEach(tokens) { token in
-                Button {
+                WordButton(
+                    token: token,
+                    isSelected: token.id == selectedTokenID
+                ) {
                     onSelect(token)
-                } label: {
-                    Text(token.text)
-                        .font(.body)
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 1)
-                        .padding(.vertical, 1)
-                        .fixedSize()
                 }
-                .buttonStyle(.plain)
-                .help("Explain \(token.normalized)")
             }
         }
+    }
+}
+
+struct WordButton: View {
+    let token: WordToken
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: onSelect) {
+            Text(token.text)
+                .font(.body)
+                .foregroundStyle(isSelected ? Color.white : Color.primary)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(background)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .help("Explain \(token.normalized)")
+        .onHover { isHovered = $0 }
+    }
+
+    private var background: some ShapeStyle {
+        if isSelected {
+            return AnyShapeStyle(Color.accentColor)
+        }
+        if isHovered {
+            return AnyShapeStyle(Color.accentColor.opacity(0.14))
+        }
+        return AnyShapeStyle(Color.clear)
     }
 }
 
@@ -431,6 +614,14 @@ struct PhraseDetailView: View {
                     detail("Tone", phrase.tone)
                     detail("Example", phrase.example)
 
+                    if store.isGeneratingAI {
+                        ProgressView("Asking \(store.selectedOllamaModel)...")
+                    } else if let aiExplanation = store.aiExplanation, !aiExplanation.isEmpty {
+                        detail("Ollama", aiExplanation)
+                    } else if store.selectedOllamaModel.isEmpty {
+                        detail("AI", "Using stubbed explanation. Choose a local Ollama model in Settings for real AI responses.")
+                    }
+
                     Spacer()
 
                     Button("Save to Learning Bucket") {
@@ -439,13 +630,20 @@ struct PhraseDetailView: View {
                     .buttonStyle(.borderedProminent)
                 }
             } else {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(spacing: 8) {
+                    Spacer()
                     Text("Click a word to explain it")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary.opacity(0.6))
                     Text("No explanation is preselected. This is closer to the desired interaction: the user chooses what confused them after seeing the translation.")
+                        .font(.system(size: 11))
+                        .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
+                        .opacity(0.6)
+                        .frame(maxWidth: 260)
                     Spacer()
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .padding(18)
@@ -507,6 +705,68 @@ struct ComposerView: View {
     }
 }
 
+struct SettingsView: View {
+    @ObservedObject var store: DiscoveryStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Local AI")
+                        .font(.headline)
+                    Text("Ollama keeps prototype AI calls local for privacy.")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Refresh Models") {
+                    Task {
+                        await store.refreshOllamaModels()
+                    }
+                }
+            }
+
+            Text(store.ollamaStatusMessage)
+                .font(.callout)
+                .foregroundStyle(store.ollamaModels.isEmpty ? .secondary : .primary)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            if store.isCheckingOllama {
+                ProgressView("Checking Ollama...")
+            } else if !store.ollamaModels.isEmpty {
+                Picker(
+                    "Model",
+                    selection: Binding(
+                        get: { store.selectedOllamaModel },
+                        set: { store.selectOllamaModel($0) }
+                    )
+                ) {
+                    ForEach(store.ollamaModels, id: \.self) { model in
+                        Text(model).tag(model)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Text("Selected model is persisted with UserDefaults for this prototype.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Start Ollama, then refresh models.")
+                    Text("Example: `ollama run llama3.2`")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(18)
+    }
+}
+
 struct ReviewView: View {
     @ObservedObject var store: DiscoveryStore
 
@@ -562,11 +822,13 @@ enum ClipboardReader {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var panel: NSPanel?
-    private var store = DiscoveryStore(capturedText: ClipboardReader.readText())
+    private var store: DiscoveryStore!
     private var hotKeyRef: EventHotKeyRef?
     private var hotKeyHandler: EventHandlerRef?
 
+    @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
+        store = DiscoveryStore(capturedText: ClipboardReader.readText())
         NSApp.setActivationPolicy(.accessory)
         setupMenuBar()
         registerHotKey()
@@ -582,6 +844,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @MainActor
     private func setupMenuBar() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.title = "Context"
@@ -596,10 +859,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = item
     }
 
+    @MainActor
     @objc private func openAssistant() {
         showAssistant()
     }
 
+    @MainActor
     @objc private func refreshFromClipboard() {
         store.replaceCapturedText(ClipboardReader.readText())
         showAssistant()
@@ -609,6 +874,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.terminate(nil)
     }
 
+    @MainActor
     private func showAssistant() {
         store.replaceCapturedText(ClipboardReader.readText())
 
@@ -679,7 +945,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
                 if hotKeyID.id == 1 {
                     let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
-                    DispatchQueue.main.async {
+                    Task { @MainActor in
                         delegate.showAssistant()
                     }
                 }
