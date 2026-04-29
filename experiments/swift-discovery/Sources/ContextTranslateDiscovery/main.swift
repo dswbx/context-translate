@@ -1011,6 +1011,24 @@ enum AssistantWindowMode {
             return nil
         }
     }
+
+    var styleMask: NSWindow.StyleMask {
+        switch self {
+        case .normal:
+            return [.titled, .closable, .resizable, .fullSizeContentView]
+        case .bubble:
+            return [.titled, .resizable, .fullSizeContentView]
+        }
+    }
+
+    var hidesTitleBar: Bool {
+        switch self {
+        case .normal:
+            return false
+        case .bubble:
+            return true
+        }
+    }
 }
 
 struct ExplanationView: View {
@@ -1958,13 +1976,14 @@ enum SelectionGeometryReader {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem?
     private var normalPanel: NSPanel?
     private var bubblePanel: NSPanel?
     private var store: DiscoveryStore!
     private var hotKeyRef: EventHotKeyRef?
     private var hotKeyHandler: EventHandlerRef?
+    private var bubbleLocalEventMonitor: Any?
 
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -1983,6 +2002,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let hotKeyHandler {
             RemoveEventHandler(hotKeyHandler)
         }
+        stopBubbleDismissMonitor()
+    }
+
+    @MainActor
+    func applicationDidResignActive(_ notification: Notification) {
+        closeBubblePanel()
+    }
+
+    @MainActor
+    func windowWillClose(_ notification: Notification) {
+        guard let closedPanel = notification.object as? NSPanel,
+              closedPanel === bubblePanel else {
+            return
+        }
+
+        stopBubbleDismissMonitor()
     }
 
     @MainActor
@@ -2049,6 +2084,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let panel = panel(for: mode)
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+
+        switch mode {
+        case .normal:
+            closeBubblePanel()
+        case .bubble:
+            startBubbleDismissMonitor(for: panel)
+        }
     }
 
     @MainActor
@@ -2087,12 +2129,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 width: mode.initialSize.width,
                 height: mode.initialSize.height
             ),
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            styleMask: mode.styleMask,
             backing: .buffered,
             defer: false
         )
 
         panel.title = mode.title
+        panel.delegate = self
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
@@ -2103,6 +2146,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panel.setFrameAutosaveName(autosaveName)
         }
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        if mode.hidesTitleBar {
+            panel.titleVisibility = .hidden
+            panel.titlebarAppearsTransparent = true
+            panel.standardWindowButton(.closeButton)?.isHidden = true
+            panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+            panel.standardWindowButton(.zoomButton)?.isHidden = true
+        }
         panel.contentView = NSHostingView(rootView: AssistantView(store: store, mode: mode))
         return panel
     }
@@ -2120,6 +2170,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
+    }
+
+    @MainActor
+    private func startBubbleDismissMonitor(for panel: NSPanel) {
+        stopBubbleDismissMonitor()
+        bubbleLocalEventMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self, weak panel] event in
+            guard let self,
+                  let panel,
+                  panel.isVisible else {
+                return event
+            }
+
+            if event.window !== panel {
+                self.closeBubblePanel()
+            }
+
+            return event
+        }
+    }
+
+    @MainActor
+    private func closeBubblePanel() {
+        guard let bubblePanel,
+              bubblePanel.isVisible else {
+            stopBubbleDismissMonitor()
+            return
+        }
+
+        bubblePanel.close()
+    }
+
+    @MainActor
+    private func stopBubbleDismissMonitor() {
+        if let bubbleLocalEventMonitor {
+            NSEvent.removeMonitor(bubbleLocalEventMonitor)
+            self.bubbleLocalEventMonitor = nil
+        }
     }
 
     private func registerHotKey() {

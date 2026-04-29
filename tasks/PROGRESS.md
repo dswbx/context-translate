@@ -172,3 +172,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Menu bar opens normal mode. Cmd+Option+E opens bubble mode. Bubble placement uses Accessibility selection bounds when available and mouse location as fallback.
 **Next step:** Manually test bubble placement in apps that do and do not expose selected-text bounds.
+
+## 2026-04-29 - Made Shortcut Bubble Transient
+
+**Task:** TASK-003
+**Summary:** Removed visible title-bar chrome from the shortcut bubble and made it close when the app loses focus or the user clicks outside the bubble.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Keep the normal menu-bar window persistent and titled. Apply transient behavior only to the shortcut bubble.
+**Next step:** Manually verify that clicking inside the bubble keeps it open, clicking outside closes it, and the menu-bar window remains persistent.

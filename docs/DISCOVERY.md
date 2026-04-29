@@ -166,7 +166,7 @@ Add entries in this format:
 **Area:** windowing
 **Observed:** The menu-bar path wants a normal persistent window, while the global shortcut wants a compact floating bubble near the current selection. Accessibility can sometimes provide selected-text bounds, but not every app exposes them.
 **Why it matters:** A bubble that appears near the user's selection feels contextual. A bubble that cannot find selection bounds still needs a predictable fallback.
-**Recommendation:** Keep separate normal and bubble panel modes. Position the bubble from Accessibility selection bounds when available, otherwise near the current mouse location.
+**Recommendation:** Keep separate normal and bubble panel modes. Position the bubble from Accessibility selection bounds when available, otherwise near the current mouse location. Treat the shortcut bubble as transient: remove visible title chrome and close it when focus moves outside the bubble.
 **Carry forward:** Yes.
 
 ## Extraction Checklist
