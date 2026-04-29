@@ -29,6 +29,7 @@ final class DiscoveryStore: ObservableObject {
     private var translationTask: Task<Void, Never>?
     private var detailTask: Task<Void, Never>?
     private var composerTask: Task<Void, Never>?
+    private var lastGeneratedComposerInput: String?
 
     init(capturedText: String) {
         self.capturedText = capturedText
@@ -53,6 +54,18 @@ final class DiscoveryStore: ObservableObject {
 
     var translatedText: String {
         germanTranslation
+    }
+
+    var composerInputText: String {
+        composerInput.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var composerActionTitle: String {
+        if composerOutputs.hasContent && composerInputText == lastGeneratedComposerInput {
+            return "Regenerate"
+        }
+
+        return "Compose"
     }
 
     func replaceCapturedText(_ text: String) {
@@ -323,6 +336,7 @@ final class DiscoveryStore: ObservableObject {
                 let response = try await askOllama(prompt: prompt)
                 guard !Task.isCancelled else { return }
                 composerOutputs = ComposerOutputs.fromModelResponse(response)
+                lastGeneratedComposerInput = input
                 composerStatusMessage = "Composed with \(selectedOllamaModel)."
             } catch is CancellationError {
                 composerStatusMessage = "Composition stopped."
@@ -916,40 +930,10 @@ struct ComposerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Write a thought in your native language")
-                    .font(.headline)
-                Spacer()
-                if store.isGeneratingComposer {
-                    Button {
-                        store.stopComposer()
-                    } label: {
-                        Label("Stop", systemImage: "stop.fill")
-                    }
-                    .buttonStyle(.borderless)
-                } else {
-                    Button {
-                        store.compose()
-                    } label: {
-                        Label("Compose", systemImage: "sparkles")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(store.composerInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
+            Text("Write a thought in your native language")
+                .font(.headline)
 
-            TextField("", text: $store.composerInput)
-                .font(.body)
-                .textFieldStyle(.plain)
-                .onSubmit {
-                    store.compose()
-                }
-                .padding(8)
-                .frame(height: 34)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color(nsColor: .separatorColor))
-                )
+            composerInputRow
 
             Text(store.composerStatusMessage)
                 .font(.caption)
@@ -966,6 +950,39 @@ struct ComposerView: View {
         .padding(18)
     }
 
+    private var composerInputRow: some View {
+        HStack(spacing: 8) {
+            TextField("", text: $store.composerInput)
+                .font(.body)
+                .textFieldStyle(.plain)
+                .onSubmit {
+                    if !store.composerInputText.isEmpty {
+                        store.compose()
+                    }
+                }
+
+            if store.isGeneratingComposer {
+                Button("Stop") {
+                    store.stopComposer()
+                }
+                .buttonStyle(.borderless)
+            } else {
+                Button(store.composerActionTitle) {
+                    store.compose()
+                }
+                .buttonStyle(.borderless)
+                .disabled(store.composerInputText.isEmpty)
+            }
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 6)
+        .frame(height: 34)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(nsColor: .separatorColor))
+        )
+    }
+
     private func outputText(_ text: String) -> String {
         if store.isGeneratingComposer && text.isEmpty {
             return "Loading..."
@@ -976,11 +993,15 @@ struct ComposerView: View {
 
     private func output(_ title: String, _ text: String, isPlaceholder: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 6) {
+                Text(text)
+                    .foregroundStyle(isPlaceholder ? Color.secondary.opacity(0.65) : Color.primary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 Button {
                     ClipboardWriter.copy(text)
                 } label: {
@@ -990,13 +1011,10 @@ struct ComposerView: View {
                 .disabled(isPlaceholder || text.isEmpty)
                 .help("Copy \(title.lowercased()) variant")
             }
-            Text(text)
-                .foregroundStyle(isPlaceholder ? Color.secondary.opacity(0.65) : Color.primary)
-                .textSelection(.enabled)
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 }

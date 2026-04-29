@@ -109,3 +109,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Use the native AppKit Edit menu for standard text commands instead of custom copy handling on selectable text. Keep explicit copy buttons for Composer outputs because those are primary user actions.
 **Next step:** Run the app and manually verify Command+C against selected translation/explanation/output text.
+
+## 2026-04-29 - Refined Composer Input Actions
+
+**Task:** TASK-003
+**Summary:** Moved the Composer action into the single-line input row, removed the sparkle icon, placed result copy buttons directly beside result text, and added Regenerate labeling when the current input has already produced outputs.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** The Composer action remains disabled only for empty input. Once output exists for the unchanged input, the action label becomes "Regenerate" and remains available.
+**Next step:** Manually check the Composer row layout with short and long generated outputs.
