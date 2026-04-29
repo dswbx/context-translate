@@ -4,19 +4,15 @@ import SwiftUI
 
 final class DiscoveryStore: ObservableObject {
     @Published var capturedText: String
-    @Published var selectedPhrase: PhraseExplanation
+    @Published var selectedPhrase: PhraseExplanation?
     @Published var savedPhrases: [PhraseExplanation]
     @Published var composerInput: String
     @Published var composerOutputs: ComposerOutputs
 
-    let phraseOptions: [PhraseExplanation]
-
     init(capturedText: String) {
-        let options = PhraseExplanation.samplePhrases
         self.capturedText = capturedText
-        self.phraseOptions = options
-        self.selectedPhrase = options[0]
-        self.savedPhrases = [options[1]]
+        self.selectedPhrase = nil
+        self.savedPhrases = [PhraseExplanation.sampleLearningItem]
         self.composerInput = "damit wir uns spaeter keine Steine in den Weg legen"
         self.composerOutputs = ComposerOutputs.generate(
             from: "damit wir uns spaeter keine Steine in den Weg legen"
@@ -29,13 +25,21 @@ final class DiscoveryStore: ObservableObject {
 
     func replaceCapturedText(_ text: String) {
         capturedText = text.isEmpty ? StubTranslator.defaultSourceText : text
+        selectedPhrase = nil
     }
 
-    func selectPhrase(_ phrase: PhraseExplanation) {
-        selectedPhrase = phrase
+    var wordTokens: [WordToken] {
+        WordToken.tokenize(capturedText)
+    }
+
+    func selectWord(_ token: WordToken) {
+        selectedPhrase = PhraseExplanation.explain(word: token.normalized, visibleWord: token.text, context: capturedText)
     }
 
     func saveSelectedPhrase() {
+        guard let selectedPhrase else {
+            return
+        }
         guard !savedPhrases.contains(where: { $0.phrase == selectedPhrase.phrase }) else {
             return
         }
@@ -47,6 +51,29 @@ final class DiscoveryStore: ObservableObject {
     }
 }
 
+struct WordToken: Identifiable {
+    let id = UUID()
+    let text: String
+    let normalized: String
+
+    static func tokenize(_ text: String) -> [WordToken] {
+        text
+            .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
+            .compactMap { raw in
+                let normalized = raw
+                    .trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+                    .lowercased()
+
+                guard !normalized.isEmpty else {
+                    return nil
+                }
+
+                return WordToken(text: raw, normalized: normalized)
+            }
+    }
+}
+
 struct PhraseExplanation: Identifiable, Equatable {
     let id = UUID()
     let phrase: String
@@ -55,21 +82,61 @@ struct PhraseExplanation: Identifiable, Equatable {
     let tone: String
     let example: String
 
-    static let samplePhrases = [
-        PhraseExplanation(
-            phrase: "circle back",
-            meaning: "Return to a topic later.",
-            contextualMeaning: "The speaker wants to postpone this topic without dropping it.",
-            tone: "Common workplace phrase; neutral but a little corporate.",
-            example: "Let's circle back after the customer call."
-        ),
+    static let sampleLearningItem =
         PhraseExplanation(
             phrase: "on the same page",
             meaning: "Sharing the same understanding.",
             contextualMeaning: "The speaker wants alignment before moving forward.",
             tone: "Friendly and professional.",
             example: "I want to make sure we're on the same page before I send the proposal."
-        ),
+        )
+
+    static func explain(word: String, visibleWord: String, context: String) -> PhraseExplanation {
+        switch word {
+        case "circle":
+            return PhraseExplanation(
+                phrase: visibleWord,
+                meaning: "As a verb, it can mean to move around something. In workplace English it often appears in the phrase 'circle back'.",
+                contextualMeaning: "Here it probably belongs to 'circle back', meaning return to the topic later.",
+                tone: "Workplace-friendly; slightly corporate.",
+                example: "Let's circle back after lunch."
+            )
+        case "back":
+            return PhraseExplanation(
+                phrase: visibleWord,
+                meaning: "Return, reverse direction, or support someone depending on context.",
+                contextualMeaning: "With 'circle', it forms 'circle back': return to a topic later.",
+                tone: "Neutral. The phrase 'circle back' is common in meetings.",
+                example: "I'll get the numbers and circle back tomorrow."
+            )
+        case "blocker", "blockers":
+            return PhraseExplanation(
+                phrase: visibleWord,
+                meaning: "Something that prevents progress.",
+                contextualMeaning: "The issue needs attention before work can continue.",
+                tone: "Direct, common in technical and project teams.",
+                example: "The missing API key is the only blocker right now."
+            )
+        case "same", "page":
+            return PhraseExplanation(
+                phrase: visibleWord,
+                meaning: "Part of the phrase 'on the same page', meaning shared understanding.",
+                contextualMeaning: "The speaker wants everyone aligned before moving forward.",
+                tone: "Friendly and professional.",
+                example: "I want to make sure we're on the same page before I send the proposal."
+            )
+        default:
+            return PhraseExplanation(
+                phrase: visibleWord,
+                meaning: "Stub explanation for this word.",
+                contextualMeaning: "In this sentence, '\(visibleWord)' contributes to the overall message: \(context)",
+                tone: "Tone needs real AI analysis in the production version.",
+                example: "Try this word in a short workplace sentence to test whether it feels natural."
+            )
+        }
+    }
+
+    static let samplePhrases = [
         PhraseExplanation(
             phrase: "blocker",
             meaning: "Something that prevents progress.",
@@ -198,13 +265,15 @@ struct ExplanationView: View {
                     section("German Translation", text: store.translatedText)
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Tap a confusing phrase")
+                        Text("Click any confusing word")
                             .font(.headline)
-                        FlowLayout(items: store.phraseOptions) { phrase in
-                            Button(phrase.phrase) {
-                                store.selectPhrase(phrase)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 8)], alignment: .leading, spacing: 8) {
+                            ForEach(store.wordTokens) { token in
+                                Button(token.text) {
+                                    store.selectWord(token)
+                                }
+                                .buttonStyle(.bordered)
                             }
-                            .buttonStyle(.bordered)
                         }
                     }
                 }
@@ -238,23 +307,33 @@ struct PhraseDetailView: View {
     @ObservedObject var store: DiscoveryStore
 
     var body: some View {
-        let phrase = store.selectedPhrase
+        Group {
+            if let phrase = store.selectedPhrase {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(phrase.phrase)
+                        .font(.system(size: 24, weight: .semibold))
 
-        VStack(alignment: .leading, spacing: 14) {
-            Text(phrase.phrase)
-                .font(.system(size: 24, weight: .semibold))
+                    detail("Meaning", phrase.meaning)
+                    detail("In this context", phrase.contextualMeaning)
+                    detail("Tone", phrase.tone)
+                    detail("Example", phrase.example)
 
-            detail("Meaning", phrase.meaning)
-            detail("In this context", phrase.contextualMeaning)
-            detail("Tone", phrase.tone)
-            detail("Example", phrase.example)
+                    Spacer()
 
-            Spacer()
-
-            Button("Save to Learning Bucket") {
-                store.saveSelectedPhrase()
+                    Button("Save to Learning Bucket") {
+                        store.saveSelectedPhrase()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Click a word to explain it")
+                        .font(.system(size: 22, weight: .semibold))
+                    Text("No explanation is preselected. This is closer to the desired interaction: the user chooses what confused them after seeing the translation.")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
             }
-            .buttonStyle(.borderedProminent)
         }
         .padding(18)
     }
@@ -355,6 +434,12 @@ struct FlowLayout<Item: Identifiable, Content: View>: View {
     }
 }
 
+final class AssistantPanel: NSPanel {
+    override func cancelOperation(_ sender: Any?) {
+        close()
+    }
+}
+
 enum ClipboardReader {
     static func readText() -> String {
         NSPasteboard.general.string(forType: .string) ?? StubTranslator.defaultSourceText
@@ -415,7 +500,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.replaceCapturedText(ClipboardReader.readText())
 
         if panel == nil {
-            let panel = NSPanel(
+            let panel = AssistantPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 680, height: 560),
                 styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
                 backing: .buffered,
@@ -423,6 +508,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             panel.title = "Context Discovery"
             panel.isFloatingPanel = true
+            panel.hidesOnDeactivate = false
+            panel.isReleasedWhenClosed = false
             panel.level = .floating
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.contentView = NSHostingView(rootView: AssistantView(store: store))

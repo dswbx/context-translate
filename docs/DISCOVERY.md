@@ -84,6 +84,22 @@ Add entries in this format:
 **Recommendation:** Use normal local execution for SwiftPM build/run commands. If full Xcode is needed later, ask the product owner before switching.
 **Carry forward:** Yes.
 
+### 2026-04-29 - Word-Level Selection Feels Closer To The Product Intent
+
+**Area:** UI
+**Observed:** The prototype originally used fixed phrase chips and preselected the first phrase. Product feedback requested clickable individual words and no preselection.
+**Why it matters:** Users should decide what confused them after seeing the translation. Preselection makes the app feel like it is guessing too early.
+**Recommendation:** The real MVP should render the original text as selectable words or phrases, start with an empty detail state, and explain only after the user chooses text.
+**Carry forward:** Yes.
+
+### 2026-04-29 - Floating Window Should Not Auto-Disappear
+
+**Area:** UI
+**Observed:** Product feedback requested that the floating assistant stay visible until the user closes it with the window close control or Esc.
+**Why it matters:** Users may compare the assistant with the source app, copy text, or pause mid-reading. Auto-hiding would make the flow feel fragile.
+**Recommendation:** The real MVP should keep the assistant visible across app focus changes and provide explicit close behavior.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

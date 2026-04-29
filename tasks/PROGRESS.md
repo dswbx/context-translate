@@ -28,3 +28,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`, `swift run`
 **Decisions made:** Continue discovery with SwiftPM for now; full Xcode is not required until the prototype needs Xcode-specific app project behavior.
 **Next step:** Product owner tests the running prototype and reports what feels useful, awkward, or missing.
+
+## 2026-04-29 - Prototype Interaction Feedback Applied
+
+**Task:** TASK-003
+**Summary:** Updated the prototype so the assistant window stays visible until explicitly closed and the explanation flow starts empty with individual clickable words from the captured text.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** The discovery flow should not preselect an explanation. The floating window should stay visible across focus changes and close through the window control or Esc.
+**Next step:** Relaunch the prototype and product-test word clicking, Esc close, and window persistence.
