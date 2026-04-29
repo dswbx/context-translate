@@ -1086,7 +1086,7 @@ Expected: command exits with status 0.
 Run:
 
 ```bash
-rg -n "UNFINISHED|INCOMPLETE|REPLACE_ME|COMING_SOON" README.md AGENTS.md docs tasks experiments
+rg -n "UNFINISHED|INCOMPLETE|REPLACE_ME|COMING_SOON" README.md AGENTS.md docs/PRODUCT.md docs/MVP.md docs/DISCOVERY.md docs/ROADMAP.md docs/DECISIONS.md docs/QUESTIONS.md docs/mockups tasks experiments
 ```
 
 Expected: no matches. If matches appear only inside the committed setup spec as historical examples, do not change them unless they are in newly created scaffold files.

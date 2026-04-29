@@ -4,7 +4,7 @@
 
 ### TASK-001: Repository Operating Scaffold
 
-**Status:** active
+**Status:** done
 **Owner type:** agent
 **Goal:** Create the repository docs, task tracking, discovery lane, and agent instructions.
 **Acceptance criteria:**
@@ -18,7 +18,7 @@
 
 ### TASK-002: Discovery Prototype Brief
 
-**Status:** not-started
+**Status:** active
 **Owner type:** agent with product review
 **Goal:** Turn `docs/DISCOVERY.md` into a concrete prototype brief before coding the Swift experiment.
 **Acceptance criteria:**
