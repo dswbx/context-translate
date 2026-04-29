@@ -58,6 +58,14 @@ Expected behavior:
 - Copying English text to the clipboard before opening the assistant populates the explanation flow.
 - Pressing `Command+Option+E` opens the same panel when the hotkey registration works.
 
+For a lightweight restart-on-change loop, run:
+
+```bash
+bash scripts/dev-watch.sh
+```
+
+The watcher polls `Package.swift` and `Sources/**/*.swift`, stops the running prototype, and starts `swift run` again when files change.
+
 ### Product Review Questions
 
 - Does clipboard fallback feel acceptable for discovery?

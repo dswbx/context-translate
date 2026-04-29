@@ -100,6 +100,22 @@ Add entries in this format:
 **Recommendation:** The real MVP should keep the assistant visible across app focus changes and provide explicit close behavior.
 **Carry forward:** Yes.
 
+### 2026-04-29 - Inline Original Text Is Better Than A Separate Word Grid
+
+**Area:** UI
+**Observed:** Product feedback clarified that words should be clickable in the original text itself, not repeated in a separate selection area.
+**Why it matters:** Keeping interaction inside the original sentence preserves reading flow and makes the product feel less like a form.
+**Recommendation:** The real MVP should make the original text itself interactive, with word and phrase selection in-place.
+**Carry forward:** Yes.
+
+### 2026-04-29 - SwiftPM Needs A Small Watch Wrapper
+
+**Area:** build tooling
+**Observed:** SwiftPM has `swift run` and `swift build`, but no built-in watch mode.
+**Why it matters:** Manual restarts slow discovery iteration.
+**Recommendation:** Use a lightweight local watcher script during discovery. Revisit full Xcode or a richer dev runner only if the prototype grows beyond SwiftPM ergonomics.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

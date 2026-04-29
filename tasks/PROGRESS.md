@@ -37,3 +37,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** The discovery flow should not preselect an explanation. The floating window should stay visible across focus changes and close through the window control or Esc.
 **Next step:** Relaunch the prototype and product-test word clicking, Esc close, and window persistence.
+
+## 2026-04-29 - Inline Word Selection And Dev Watch Added
+
+**Task:** TASK-003
+**Summary:** Replaced the separate word-button grid with clickable words inside the original text area and added a lightweight SwiftPM restart-on-change watcher.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `experiments/swift-discovery/scripts/dev-watch.sh`, `experiments/swift-discovery/README.md`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Word selection belongs in the original text surface. SwiftPM needs a helper script for watch-like iteration.
+**Next step:** Test `bash scripts/dev-watch.sh` during prototype iteration if manual restarts become annoying.

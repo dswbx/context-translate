@@ -57,8 +57,7 @@ struct WordToken: Identifiable {
     let normalized: String
 
     static func tokenize(_ text: String) -> [WordToken] {
-        text
-            .split(whereSeparator: { $0.isWhitespace })
+        text.split(whereSeparator: { $0.isWhitespace })
             .map(String.init)
             .compactMap { raw in
                 let normalized = raw
@@ -261,21 +260,8 @@ struct ExplanationView: View {
         HStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    section("Original", text: store.capturedText)
+                    ClickableOriginalText(store: store)
                     section("German Translation", text: store.translatedText)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Click any confusing word")
-                            .font(.headline)
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 8)], alignment: .leading, spacing: 8) {
-                            ForEach(store.wordTokens) { token in
-                                Button(token.text) {
-                                    store.selectWord(token)
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                        }
-                    }
                 }
                 .padding(18)
             }
@@ -299,6 +285,51 @@ struct ExplanationView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(nsColor: .controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+    }
+}
+
+struct ClickableOriginalText: View {
+    @ObservedObject var store: DiscoveryStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Original")
+                .font(.headline)
+            WrappingWords(tokens: store.wordTokens) { token in
+                store.selectWord(token)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+    }
+}
+
+struct WrappingWords: View {
+    let tokens: [WordToken]
+    let onSelect: (WordToken) -> Void
+
+    var body: some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 24), spacing: 4, alignment: .leading)],
+            alignment: .leading,
+            spacing: 4
+        ) {
+            ForEach(tokens) { token in
+                Button {
+                    onSelect(token)
+                } label: {
+                    Text(token.text)
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 2)
+                        .padding(.vertical, 1)
+                }
+                .buttonStyle(.plain)
+                .help("Explain \(token.normalized)")
+            }
         }
     }
 }
