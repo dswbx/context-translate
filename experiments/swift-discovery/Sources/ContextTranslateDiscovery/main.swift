@@ -758,8 +758,6 @@ struct AssistantView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
             Picker("Mode", selection: $tab) {
                 ForEach(PrototypeTab.visibleCases) { tab in
                     Text(tab.title).tag(tab)
@@ -788,25 +786,6 @@ struct AssistantView: View {
         .task {
             await store.refreshOllamaModels()
         }
-    }
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Context")
-                    .font(.system(size: 18, weight: .semibold))
-                Text(store.captureStatusMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Button("Recapture") {
-                store.replaceCapturedText(TextCaptureService.captureText())
-            }
-        }
-        .padding(16)
     }
 }
 
@@ -893,9 +872,12 @@ struct TranslationSectionView: View {
                 .background(Color(nsColor: .controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
-            Text(store.translationStatusMessage)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(store.translationStatusMessage)
+                Text(store.captureStatusMessage)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -917,8 +899,15 @@ struct ClickableOriginalText: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Original")
-                .font(.headline)
+            HStack {
+                Text("Original")
+                    .font(.headline)
+                Spacer()
+                Button("Recapture") {
+                    store.replaceCapturedText(TextCaptureService.captureText())
+                }
+                .buttonStyle(.borderless)
+            }
             WrappingWords(
                 tokens: store.wordTokens,
                 selectedTokenID: store.selectedTokenID

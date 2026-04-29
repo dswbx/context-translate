@@ -136,3 +136,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Try Accessibility selected text first, temporary copy-restore second, clipboard fallback third, and sample text only when no text is available.
 **Next step:** Manually test capture from several apps and note which ones support Accessibility selection versus copy-restore.
+
+## 2026-04-29 - Moved Capture Controls Into Text Pane
+
+**Task:** TASK-003
+**Summary:** Removed the top app header, moved Recapture into the Original text heading, and moved the capture method signal into the text pane footer beside translation status.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Keep capture controls and capture metadata local to the text pane because they describe the current original text, not the whole app.
+**Next step:** Manually inspect the reduced header layout in the running prototype.
