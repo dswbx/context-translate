@@ -199,3 +199,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Keep translucency scoped to the shortcut bubble. Keep the normal assistant window opaque. Let users resize the text and detail panes with the native split divider.
 **Next step:** Manually verify bubble legibility over light and dark backgrounds, then test dragging the Explain divider at compact and expanded bubble sizes.
+
+## 2026-04-29 - Matched Explain Divider Color
+
+**Task:** TASK-003
+**Summary:** Replaced the native split-view divider with a custom draggable separator using the system separator color so it matches the header divider.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Keep a narrow visible divider with a wider invisible drag target, and persist the text pane width.
+**Next step:** Manually verify the divider color in light and dark appearance and confirm dragging still feels easy.

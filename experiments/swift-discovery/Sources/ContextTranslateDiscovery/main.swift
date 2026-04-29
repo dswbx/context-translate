@@ -1093,23 +1093,66 @@ enum AssistantWindowMode {
 
 struct ExplanationView: View {
     @ObservedObject var store: DiscoveryStore
+    @AppStorage("ContextDiscovery.ExplainTextPaneWidth") private var storedTextPaneWidth = 360.0
+    @State private var dragStartTextPaneWidth: CGFloat?
+
+    private let minTextPaneWidth = 280.0
+    private let minDetailPaneWidth = 240.0
 
     var body: some View {
-        HSplitView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    ClickableOriginalText(store: store)
-                    TranslationSectionView(store: store)
+        GeometryReader { proxy in
+            HStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ClickableOriginalText(store: store)
+                        TranslationSectionView(store: store)
+                    }
+                    .padding(18)
                 }
-                .padding(18)
-            }
-            .frame(minWidth: 280, idealWidth: 360, maxWidth: .infinity)
+                .frame(width: constrainedTextPaneWidth(for: proxy.size.width))
 
-            PhraseDetailView(store: store)
-                .frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
+                splitDivider(totalWidth: proxy.size.width)
+
+                PhraseDetailView(store: store)
+                    .frame(minWidth: minDetailPaneWidth, maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 
+    private func splitDivider(totalWidth: CGFloat) -> some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: 1)
+            .overlay {
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 10)
+                    .contentShape(Rectangle())
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        if dragStartTextPaneWidth == nil {
+                            dragStartTextPaneWidth = constrainedTextPaneWidth(for: totalWidth)
+                        }
+                        let startWidth = dragStartTextPaneWidth ?? CGFloat(storedTextPaneWidth)
+                        storedTextPaneWidth = Double(
+                            constrainedTextPaneWidth(startWidth + value.translation.width, totalWidth: totalWidth)
+                        )
+                    }
+                    .onEnded { _ in
+                        dragStartTextPaneWidth = nil
+                    }
+            )
+    }
+
+    private func constrainedTextPaneWidth(for totalWidth: CGFloat) -> CGFloat {
+        constrainedTextPaneWidth(CGFloat(storedTextPaneWidth), totalWidth: totalWidth)
+    }
+
+    private func constrainedTextPaneWidth(_ width: CGFloat, totalWidth: CGFloat) -> CGFloat {
+        max(minTextPaneWidth, min(width, totalWidth - minDetailPaneWidth - 1))
+    }
 }
 
 struct TranslationSectionView: View {
