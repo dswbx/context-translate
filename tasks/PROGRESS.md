@@ -77,8 +77,8 @@ Chronological log of meaningful work. Agents must update this before ending a se
 ## 2026-04-29 - Added Product Terminology
 
 **Task:** TASK-003
-**Summary:** Added a shared terminology document for core product, AI, privacy, and development language.
+**Summary:** Added a shared terminology document for core product, AI, privacy, UI pane, and development language.
 **Files changed:** `docs/TERMINOLOGY.md`, `README.md`, `AGENTS.md`, `tasks/PROGRESS.md`
 **Checks run:** Documentation-only change.
-**Decisions made:** Use "original text", "selected term", "explanation", "learning bucket", "discovery prototype", and related terms consistently.
+**Decisions made:** Use "original text", "selected term", "explanation", "text pane", "explanation pane", "learning bucket", "discovery prototype", and related terms consistently.
 **Next step:** Use the terminology doc when naming UI elements, tasks, and future implementation types.

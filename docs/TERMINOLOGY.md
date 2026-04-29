@@ -68,6 +68,16 @@ How the selected term feels to a native or fluent speaker. Examples: casual, neu
 
 A natural English sentence showing how the user could use the selected term themselves.
 
+### Text Pane
+
+The left pane in the explain view. It contains the original text and its translation.
+
+Avoid calling this the source pane because source app already means the external app where the text came from.
+
+### Explanation Pane
+
+The right pane in the explain view. It shows details for the selected term, including meaning, contextual meaning, tone, and examples.
+
 ## Product Areas
 
 ### Explain Flow
