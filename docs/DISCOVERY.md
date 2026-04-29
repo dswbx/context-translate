@@ -161,6 +161,14 @@ Add entries in this format:
 **Recommendation:** Keep signaling the capture method in the assistant header during discovery and preserve this as a production UX requirement.
 **Carry forward:** Yes.
 
+### 2026-04-29 - Hotkey Bubble Needs Position Fallbacks
+
+**Area:** windowing
+**Observed:** The menu-bar path wants a normal persistent window, while the global shortcut wants a compact floating bubble near the current selection. Accessibility can sometimes provide selected-text bounds, but not every app exposes them.
+**Why it matters:** A bubble that appears near the user's selection feels contextual. A bubble that cannot find selection bounds still needs a predictable fallback.
+**Recommendation:** Keep separate normal and bubble panel modes. Position the bubble from Accessibility selection bounds when available, otherwise near the current mouse location.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

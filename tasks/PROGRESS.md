@@ -163,3 +163,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Keep the header bar compact so it responds better to window resizing.
 **Next step:** Manually inspect the mode bar at narrow window sizes.
+
+## 2026-04-29 - Added Normal And Bubble Window Modes
+
+**Task:** TASK-003
+**Summary:** Split the assistant into a persistent normal menu-bar window and a compact hotkey bubble window that keeps all tabs but hides language/model controls.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Menu bar opens normal mode. Cmd+Option+E opens bubble mode. Bubble placement uses Accessibility selection bounds when available and mouse location as fallback.
+**Next step:** Manually test bubble placement in apps that do and do not expose selected-text bounds.

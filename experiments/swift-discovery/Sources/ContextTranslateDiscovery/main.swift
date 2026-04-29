@@ -831,6 +831,7 @@ enum SampleText {
 
 struct AssistantView: View {
     @ObservedObject var store: DiscoveryStore
+    let mode: AssistantWindowMode
     @State private var tab = PrototypeTab.explain
 
     var body: some View {
@@ -847,15 +848,17 @@ struct AssistantView: View {
 
                 Spacer()
 
-                languageMenu("Mine", selection: store.myLanguage) { language in
-                    store.selectMyLanguage(language)
-                }
+                if mode.showsSettingsControls {
+                    languageMenu("Mine", selection: store.myLanguage) { language in
+                        store.selectMyLanguage(language)
+                    }
 
-                languageMenu("Theirs", selection: store.theirLanguage) { language in
-                    store.selectTheirLanguage(language)
-                }
+                    languageMenu("Theirs", selection: store.theirLanguage) { language in
+                        store.selectTheirLanguage(language)
+                    }
 
-                modelMenu
+                    modelMenu
+                }
             }
             .padding(12)
 
@@ -874,7 +877,7 @@ struct AssistantView: View {
                 SettingsView(store: store)
             }
         }
-        .frame(minWidth: 700, minHeight: 440)
+        .frame(minWidth: mode.minSize.width, minHeight: mode.minSize.height)
         .background(Color(nsColor: .windowBackgroundColor))
         .task {
             await store.refreshOllamaModels()
@@ -947,6 +950,65 @@ enum PrototypeTab: String, CaseIterable, Identifiable {
         case .review: return "Review"
         case .learn: return "Learn"
         case .settings: return "Settings"
+        }
+    }
+}
+
+enum AssistantWindowMode {
+    case normal
+    case bubble
+
+    var initialSize: NSSize {
+        switch self {
+        case .normal:
+            return NSSize(width: 760, height: 560)
+        case .bubble:
+            return NSSize(width: 560, height: 430)
+        }
+    }
+
+    var minSize: NSSize {
+        switch self {
+        case .normal:
+            return NSSize(width: 700, height: 440)
+        case .bubble:
+            return NSSize(width: 520, height: 380)
+        }
+    }
+
+    var maxSize: NSSize {
+        switch self {
+        case .normal:
+            return NSSize(width: 1200, height: 900)
+        case .bubble:
+            return NSSize(width: 760, height: 640)
+        }
+    }
+
+    var showsSettingsControls: Bool {
+        switch self {
+        case .normal:
+            return true
+        case .bubble:
+            return false
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .normal:
+            return "Context Discovery"
+        case .bubble:
+            return "Context"
+        }
+    }
+
+    var autosaveName: String? {
+        switch self {
+        case .normal:
+            return "ContextDiscovery.AssistantPanel"
+        case .bubble:
+            return nil
         }
     }
 }
@@ -1818,9 +1880,88 @@ enum TextCaptureService {
     }
 }
 
+enum SelectionGeometryReader {
+    static func selectedTextAnchor() -> NSPoint? {
+        guard AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.frontmostApplication else {
+            return nil
+        }
+
+        let appElement = AXUIElementCreateApplication(app.processIdentifier)
+        guard let focusedElement = focusedElement(in: appElement),
+              let selectedRange = selectedTextRange(in: focusedElement),
+              let bounds = bounds(for: selectedRange, in: focusedElement) else {
+            return nil
+        }
+
+        return NSPoint(x: bounds.maxX, y: bounds.minY)
+    }
+
+    private static func focusedElement(in appElement: AXUIElement) -> AXUIElement? {
+        var focusedValue: CFTypeRef?
+        let status = AXUIElementCopyAttributeValue(
+            appElement,
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedValue
+        )
+
+        guard status == .success,
+              let focusedValue,
+              CFGetTypeID(focusedValue) == AXUIElementGetTypeID() else {
+            return nil
+        }
+
+        return (focusedValue as! AXUIElement)
+    }
+
+    private static func selectedTextRange(in element: AXUIElement) -> AXValue? {
+        var rangeValue: CFTypeRef?
+        let status = AXUIElementCopyAttributeValue(
+            element,
+            kAXSelectedTextRangeAttribute as CFString,
+            &rangeValue
+        )
+
+        guard status == .success,
+              let rangeValue,
+              CFGetTypeID(rangeValue) == AXValueGetTypeID() else {
+            return nil
+        }
+
+        return (rangeValue as! AXValue)
+    }
+
+    private static func bounds(for range: AXValue, in element: AXUIElement) -> CGRect? {
+        var parameterizedValue: CFTypeRef?
+        let status = AXUIElementCopyParameterizedAttributeValue(
+            element,
+            kAXBoundsForRangeParameterizedAttribute as CFString,
+            range,
+            &parameterizedValue
+        )
+
+        guard status == .success,
+              let parameterizedValue,
+              CFGetTypeID(parameterizedValue) == AXValueGetTypeID() else {
+            return nil
+        }
+
+        var rect = CGRect.zero
+        let value = parameterizedValue as! AXValue
+        guard AXValueGetType(value) == .cgRect,
+              AXValueGetValue(value, .cgRect, &rect),
+              !rect.isEmpty else {
+            return nil
+        }
+
+        return rect
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
-    private var panel: NSPanel?
+    private var normalPanel: NSPanel?
+    private var bubblePanel: NSPanel?
     private var store: DiscoveryStore!
     private var hotKeyRef: EventHotKeyRef?
     private var hotKeyHandler: EventHandlerRef?
@@ -1832,7 +1973,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         setupMenuBar()
         registerHotKey()
-        showAssistant(recapture: false)
+        showAssistant(mode: .normal, recapture: false)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -1887,12 +2028,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     @objc private func openAssistant() {
-        showAssistant()
+        showAssistant(mode: .normal)
     }
 
     @MainActor
     @objc private func recaptureText() {
-        showAssistant()
+        showAssistant(mode: .normal)
     }
 
     @objc private func quit() {
@@ -1900,36 +2041,85 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @MainActor
-    private func showAssistant(recapture: Bool = true) {
+    private func showAssistant(mode: AssistantWindowMode, recapture: Bool = true) {
         if recapture {
             store.replaceCapturedText(TextCaptureService.captureText())
         }
 
-        if panel == nil {
-            let panel = AssistantPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 760, height: 560),
-                styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
-                backing: .buffered,
-                defer: false
-            )
-            panel.title = "Context Discovery"
-            panel.isFloatingPanel = true
-            panel.hidesOnDeactivate = false
-            panel.isReleasedWhenClosed = false
-            panel.level = .floating
-            panel.minSize = NSSize(width: 700, height: 440)
-            panel.maxSize = NSSize(width: 1200, height: 900)
-            panel.setFrameAutosaveName("ContextDiscovery.AssistantPanel")
-            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            panel.contentView = NSHostingView(rootView: AssistantView(store: store))
+        let panel = panel(for: mode)
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @MainActor
+    private func panel(for mode: AssistantWindowMode) -> NSPanel {
+        switch mode {
+        case .normal:
+            if let normalPanel {
+                return normalPanel
+            }
+
+            let panel = makePanel(mode: .normal)
             if UserDefaults.standard.string(forKey: "NSWindow Frame ContextDiscovery.AssistantPanel") == nil {
                 panel.center()
             }
-            self.panel = panel
-        }
+            normalPanel = panel
+            return panel
+        case .bubble:
+            if let bubblePanel {
+                positionBubblePanel(bubblePanel)
+                return bubblePanel
+            }
 
-        panel?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+            let panel = makePanel(mode: .bubble)
+            positionBubblePanel(panel)
+            bubblePanel = panel
+            return panel
+        }
+    }
+
+    @MainActor
+    private func makePanel(mode: AssistantWindowMode) -> NSPanel {
+        let panel = AssistantPanel(
+            contentRect: NSRect(
+                x: 0,
+                y: 0,
+                width: mode.initialSize.width,
+                height: mode.initialSize.height
+            ),
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+
+        panel.title = mode.title
+        panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
+        panel.isReleasedWhenClosed = false
+        panel.level = .floating
+        panel.minSize = mode.minSize
+        panel.maxSize = mode.maxSize
+        if let autosaveName = mode.autosaveName {
+            panel.setFrameAutosaveName(autosaveName)
+        }
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.contentView = NSHostingView(rootView: AssistantView(store: store, mode: mode))
+        return panel
+    }
+
+    @MainActor
+    private func positionBubblePanel(_ panel: NSPanel) {
+        let size = AssistantWindowMode.bubble.initialSize
+        let anchor = SelectionGeometryReader.selectedTextAnchor() ?? NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.visibleFrame.contains(anchor) } ?? NSScreen.main
+        let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 900)
+        let proposedOrigin = NSPoint(x: anchor.x + 12, y: anchor.y - size.height - 12)
+        let origin = NSPoint(
+            x: min(max(proposedOrigin.x, visibleFrame.minX), visibleFrame.maxX - size.width),
+            y: min(max(proposedOrigin.y, visibleFrame.minY), visibleFrame.maxY - size.height)
+        )
+
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
     }
 
     private func registerHotKey() {
@@ -1978,7 +2168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if hotKeyID.id == 1 {
                     let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
                     Task { @MainActor in
-                        delegate.showAssistant()
+                        delegate.showAssistant(mode: .bubble)
                     }
                 }
 
