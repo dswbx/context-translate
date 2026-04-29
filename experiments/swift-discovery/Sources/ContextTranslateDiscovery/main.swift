@@ -12,6 +12,7 @@ final class DiscoveryStore: ObservableObject {
     @Published var savedPhrases: [PhraseExplanation]
     @Published var composerInput: String
     @Published var composerOutputs: ComposerOutputs
+    @Published var composerStatusMessage: String
     @Published var germanTranslation: String
     @Published var translationStatusMessage: String
     @Published var ollamaModels: [String]
@@ -20,12 +21,14 @@ final class DiscoveryStore: ObservableObject {
     @Published var isCheckingOllama: Bool
     @Published var isGeneratingTranslation: Bool
     @Published var isGeneratingDetail: Bool
+    @Published var isGeneratingComposer: Bool
     @Published var detailStatusMessage: String
 
     private let selectedModelKey = "ContextDiscovery.SelectedOllamaModel"
     private var selectedToken: WordToken?
     private var translationTask: Task<Void, Never>?
     private var detailTask: Task<Void, Never>?
+    private var composerTask: Task<Void, Never>?
 
     init(capturedText: String) {
         self.capturedText = capturedText
@@ -33,10 +36,9 @@ final class DiscoveryStore: ObservableObject {
         self.selectedTokenID = nil
         self.selectedWordText = nil
         self.savedPhrases = [PhraseExplanation.sampleLearningItem]
-        self.composerInput = "damit wir uns spaeter keine Steine in den Weg legen"
-        self.composerOutputs = ComposerOutputs.generate(
-            from: "damit wir uns spaeter keine Steine in den Weg legen"
-        )
+        self.composerInput = ""
+        self.composerOutputs = .empty
+        self.composerStatusMessage = "Write a thought, then compose it with a local model."
         self.germanTranslation = ""
         self.translationStatusMessage = "Choose a local Ollama model in Settings to translate."
         self.ollamaModels = []
@@ -45,6 +47,7 @@ final class DiscoveryStore: ObservableObject {
         self.isCheckingOllama = false
         self.isGeneratingTranslation = false
         self.isGeneratingDetail = false
+        self.isGeneratingComposer = false
         self.detailStatusMessage = "Click a word to explain it."
     }
 
@@ -98,7 +101,22 @@ final class DiscoveryStore: ObservableObject {
     }
 
     func compose() {
-        composerOutputs = ComposerOutputs.generate(from: composerInput)
+        stopComposer()
+
+        let input = composerInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty else {
+            composerOutputs = .empty
+            composerStatusMessage = "Write a thought first."
+            return
+        }
+
+        guard !selectedOllamaModel.isEmpty else {
+            composerOutputs = .empty
+            composerStatusMessage = "Choose a local Ollama model in Settings to compose."
+            return
+        }
+
+        generateAIComposerOutput(for: input)
     }
 
     func selectOllamaModel(_ model: String) {
@@ -176,6 +194,7 @@ final class DiscoveryStore: ObservableObject {
     func stopAIResponses() {
         stopTranslation()
         stopDetail()
+        stopComposer()
     }
 
     func stopTranslation() {
@@ -193,6 +212,15 @@ final class DiscoveryStore: ObservableObject {
         isGeneratingDetail = false
         if !selectedOllamaModel.isEmpty {
             detailStatusMessage = selectedWordText == nil ? "Click a word to explain it." : "Stopped."
+        }
+    }
+
+    func stopComposer() {
+        composerTask?.cancel()
+        composerTask = nil
+        isGeneratingComposer = false
+        if !selectedOllamaModel.isEmpty {
+            composerStatusMessage = "Stopped."
         }
     }
 
@@ -265,6 +293,45 @@ final class DiscoveryStore: ObservableObject {
             }
             isGeneratingDetail = false
             detailTask = nil
+        }
+    }
+
+    private func generateAIComposerOutput(for input: String) {
+        composerTask?.cancel()
+        composerOutputs = .empty
+        isGeneratingComposer = true
+        composerStatusMessage = "Composing with \(selectedOllamaModel)..."
+
+        let prompt = """
+        You are helping a German-speaking professional write natural English.
+        Rewrite the user's thought into three natural English variants.
+        Return valid JSON only. No markdown. No code fences.
+
+        Required JSON shape:
+        {
+          "casual": "natural casual English",
+          "neutral": "natural neutral English",
+          "professional": "natural professional English"
+        }
+
+        User thought:
+        \(input)
+        """
+
+        composerTask = Task {
+            do {
+                let response = try await askOllama(prompt: prompt)
+                guard !Task.isCancelled else { return }
+                composerOutputs = ComposerOutputs.fromModelResponse(response)
+                composerStatusMessage = "Composed with \(selectedOllamaModel)."
+            } catch is CancellationError {
+                composerStatusMessage = "Composition stopped."
+            } catch {
+                composerOutputs = .empty
+                composerStatusMessage = "Could not reach Ollama. Check that the local server is running."
+            }
+            isGeneratingComposer = false
+            composerTask = nil
         }
     }
 
@@ -346,6 +413,12 @@ struct AIWordExplanation: Decodable {
     let example: String
 }
 
+struct AIComposerOutput: Decodable {
+    let casual: String
+    let neutral: String
+    let professional: String
+}
+
 struct PhraseExplanation: Identifiable, Equatable {
     let id = UUID()
     let phrase: String
@@ -406,20 +479,32 @@ struct ComposerOutputs {
     let neutral: String
     let professional: String
 
-    static func generate(from input: String) -> ComposerOutputs {
-        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
+    static let empty = ComposerOutputs(casual: "", neutral: "", professional: "")
+
+    var hasContent: Bool {
+        !casual.isEmpty || !neutral.isEmpty || !professional.isEmpty
+    }
+
+    static func fromModelResponse(_ response: String) -> ComposerOutputs {
+        let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
+        let jsonText = trimmed
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let data = jsonText.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(AIComposerOutput.self, from: data) {
             return ComposerOutputs(
-                casual: "Let's avoid making things harder for ourselves later.",
-                neutral: "So we do not create problems for ourselves later.",
-                professional: "So we can avoid creating unnecessary obstacles later."
+                casual: decoded.casual,
+                neutral: decoded.neutral,
+                professional: decoded.professional
             )
         }
 
         return ComposerOutputs(
-            casual: "Let's avoid making things harder for ourselves later.",
-            neutral: "So we do not create problems for ourselves later.",
-            professional: "So we can avoid creating unnecessary obstacles later."
+            casual: trimmed,
+            neutral: "The local model returned an unstructured response.",
+            professional: "Ask again or try a stronger local model for cleaner structure."
         )
     }
 }
@@ -437,7 +522,7 @@ struct AssistantView: View {
             header
             Divider()
             Picker("Mode", selection: $tab) {
-                ForEach(PrototypeTab.allCases) { tab in
+                ForEach(PrototypeTab.visibleCases) { tab in
                     Text(tab.title).tag(tab)
                 }
             }
@@ -489,6 +574,8 @@ enum PrototypeTab: String, CaseIterable, Identifiable {
     case composer
     case review
     case settings
+
+    static let visibleCases: [PrototypeTab] = [.explain, .composer, .settings]
 
     var id: String { rawValue }
 
@@ -786,13 +873,6 @@ struct PhraseDetailView: View {
                     }
 
                     Spacer()
-
-                    if store.selectedPhrase != nil {
-                        Button("Save to Learning Bucket") {
-                            store.saveSelectedPhrase()
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -836,37 +916,66 @@ struct ComposerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Write a thought in your native language")
-                .font(.headline)
+            HStack {
+                Text("Write a thought in your native language")
+                    .font(.headline)
+                Spacer()
+                if store.isGeneratingComposer {
+                    Button {
+                        store.stopComposer()
+                    } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                    }
+                    .buttonStyle(.borderless)
+                } else {
+                    Button {
+                        store.compose()
+                    } label: {
+                        Label("Compose", systemImage: "sparkles")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(store.composerInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
 
             TextEditor(text: $store.composerInput)
                 .font(.body)
-                .frame(height: 110)
+                .frame(height: 72)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(Color(nsColor: .separatorColor))
                 )
 
-            Button("Compose Natural English") {
-                store.compose()
-            }
-            .buttonStyle(.borderedProminent)
+            Text(store.composerStatusMessage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
-            output("Casual", store.composerOutputs.casual)
-            output("Neutral", store.composerOutputs.neutral)
-            output("Professional", store.composerOutputs.professional)
+            if store.composerOutputs.hasContent || store.isGeneratingComposer {
+                output("Casual", outputText(store.composerOutputs.casual), isPlaceholder: !store.composerOutputs.hasContent)
+                output("Neutral", outputText(store.composerOutputs.neutral), isPlaceholder: !store.composerOutputs.hasContent)
+                output("Professional", outputText(store.composerOutputs.professional), isPlaceholder: !store.composerOutputs.hasContent)
+            }
 
             Spacer()
         }
         .padding(18)
     }
 
-    private func output(_ title: String, _ text: String) -> some View {
+    private func outputText(_ text: String) -> String {
+        if store.isGeneratingComposer && text.isEmpty {
+            return "Loading..."
+        }
+
+        return text
+    }
+
+    private func output(_ title: String, _ text: String, isPlaceholder: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(text)
+                .foregroundStyle(isPlaceholder ? Color.secondary.opacity(0.65) : Color.primary)
                 .textSelection(.enabled)
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)

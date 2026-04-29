@@ -91,3 +91,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Translation and explanation controls act independently. Detail generation remains one Ollama request that returns all fields together, while the UI keeps the selected word and field headings visible during loading.
 **Next step:** Run the prototype with Ollama available and verify refresh/stop behavior in both panes.
+
+## 2026-04-29 - Connected Composer To Ollama
+
+**Task:** TASK-003
+**Summary:** Hid the review tab and learning-bucket save button, removed Composer starter content, shortened the Composer text area, and connected Composer output generation to Ollama.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Keep review and learning-bucket code hidden rather than deleted. Generate casual, neutral, and professional Composer variants with one Ollama JSON request.
+**Next step:** Test Composer with a local Ollama model and capture any prompt or parsing findings.
