@@ -23,6 +23,8 @@ final class DiscoveryStore: ObservableObject {
     @Published var translationStatusMessage: String
     @Published var ollamaModels: [String]
     @Published var selectedOllamaModel: String
+    @Published var myLanguage: LanguageOption
+    @Published var theirLanguage: LanguageOption
     @Published var ollamaStatusMessage: String
     @Published var isCheckingOllama: Bool
     @Published var isGeneratingTranslation: Bool
@@ -32,6 +34,8 @@ final class DiscoveryStore: ObservableObject {
     @Published var detailStatusMessage: String
 
     private let selectedModelKey = "ContextDiscovery.SelectedOllamaModel"
+    private let myLanguageKey = "ContextDiscovery.MyLanguage"
+    private let theirLanguageKey = "ContextDiscovery.TheirLanguage"
     private var selectedToken: WordToken?
     private var translationTask: Task<Void, Never>?
     private var detailTask: Task<Void, Never>?
@@ -41,6 +45,9 @@ final class DiscoveryStore: ObservableObject {
     private var lastReviewedSentence: String?
 
     init(capture: TextCaptureResult) {
+        let savedMyLanguage = LanguageOption.savedValue(forKey: myLanguageKey, fallback: .german)
+        let savedTheirLanguage = LanguageOption.savedValue(forKey: theirLanguageKey, fallback: .english)
+
         self.capturedText = capture.text
         self.captureStatusMessage = capture.statusMessage
         self.selectedPhrase = nil
@@ -53,9 +60,11 @@ final class DiscoveryStore: ObservableObject {
         self.reviewSentence = ""
         self.reviewIntent = ""
         self.reviewFeedback = nil
-        self.reviewStatusMessage = "Write an English sentence to review."
+        self.myLanguage = savedMyLanguage
+        self.theirLanguage = savedTheirLanguage
+        self.reviewStatusMessage = "Write a \(savedTheirLanguage.name) sentence to review."
         self.germanTranslation = ""
-        self.translationStatusMessage = "Choose a local Ollama model in Settings to translate."
+        self.translationStatusMessage = "Choose a local Ollama model to translate."
         self.ollamaModels = []
         self.selectedOllamaModel = UserDefaults.standard.string(forKey: selectedModelKey) ?? ""
         self.ollamaStatusMessage = "Ollama has not been checked yet."
@@ -69,6 +78,10 @@ final class DiscoveryStore: ObservableObject {
 
     var translatedText: String {
         germanTranslation
+    }
+
+    var modelMenuTitle: String {
+        selectedOllamaModel.isEmpty ? "Ollama: None" : "Ollama: \(selectedOllamaModel)"
     }
 
     var composerInputText: String {
@@ -104,7 +117,7 @@ final class DiscoveryStore: ObservableObject {
         selectedWordText = nil
         selectedToken = nil
         germanTranslation = ""
-        translationStatusMessage = selectedOllamaModel.isEmpty ? "Choose a local Ollama model in Settings to translate." : "Ready to translate with \(selectedOllamaModel)."
+        translationStatusMessage = selectedOllamaModel.isEmpty ? "Choose a local Ollama model to translate." : "Ready to translate with \(selectedOllamaModel)."
         detailStatusMessage = "Click a word to explain it."
         if !selectedOllamaModel.isEmpty {
             regenerateAIResponses()
@@ -124,7 +137,7 @@ final class DiscoveryStore: ObservableObject {
 
         if selectedOllamaModel.isEmpty {
             selectedPhrase = nil
-            detailStatusMessage = "Choose a local Ollama model in Settings to explain this word."
+            detailStatusMessage = "Choose a local Ollama model to explain this word."
         } else {
             selectedPhrase = nil
             generateAIDetail(for: token)
@@ -153,7 +166,7 @@ final class DiscoveryStore: ObservableObject {
 
         guard !selectedOllamaModel.isEmpty else {
             composerOutputs = .empty
-            composerStatusMessage = "Choose a local Ollama model in Settings to compose."
+            composerStatusMessage = "Choose a local Ollama model to compose."
             return
         }
 
@@ -167,13 +180,13 @@ final class DiscoveryStore: ObservableObject {
         let intent = reviewIntent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sentence.isEmpty else {
             reviewFeedback = nil
-            reviewStatusMessage = "Write an English sentence first."
+            reviewStatusMessage = "Write a \(theirLanguage.name) sentence first."
             return
         }
 
         guard !selectedOllamaModel.isEmpty else {
             reviewFeedback = nil
-            reviewStatusMessage = "Choose a local Ollama model in Settings to review your sentence."
+            reviewStatusMessage = "Choose a local Ollama model to review your sentence."
             return
         }
 
@@ -185,6 +198,25 @@ final class DiscoveryStore: ObservableObject {
         UserDefaults.standard.set(model, forKey: selectedModelKey)
         translationStatusMessage = "Selected \(model)."
         regenerateAIResponses()
+    }
+
+    func selectMyLanguage(_ language: LanguageOption) {
+        myLanguage = language
+        UserDefaults.standard.set(language.rawValue, forKey: myLanguageKey)
+        translationStatusMessage = selectedOllamaModel.isEmpty ? "Choose a local Ollama model to translate." : "Ready to translate with \(selectedOllamaModel)."
+        if !selectedOllamaModel.isEmpty {
+            regenerateAIResponses()
+        }
+    }
+
+    func selectTheirLanguage(_ language: LanguageOption) {
+        theirLanguage = language
+        UserDefaults.standard.set(language.rawValue, forKey: theirLanguageKey)
+        reviewStatusMessage = "Write a \(language.name) sentence to review."
+        translationStatusMessage = selectedOllamaModel.isEmpty ? "Choose a local Ollama model to translate." : "Ready to translate with \(selectedOllamaModel)."
+        if !selectedOllamaModel.isEmpty {
+            regenerateAIResponses()
+        }
     }
 
     func refreshOllamaModels() async {
@@ -233,7 +265,7 @@ final class DiscoveryStore: ObservableObject {
         stopTranslation()
         guard !selectedOllamaModel.isEmpty else {
             germanTranslation = ""
-            translationStatusMessage = "Choose a local Ollama model in Settings to use real AI responses."
+            translationStatusMessage = "Choose a local Ollama model to use real AI responses."
             return
         }
 
@@ -245,7 +277,7 @@ final class DiscoveryStore: ObservableObject {
         if let selectedToken {
             selectedPhrase = nil
             guard !selectedOllamaModel.isEmpty else {
-                detailStatusMessage = "Choose a local Ollama model in Settings to explain this word."
+                detailStatusMessage = "Choose a local Ollama model to explain this word."
                 return
             }
             generateAIDetail(for: selectedToken)
@@ -301,10 +333,10 @@ final class DiscoveryStore: ObservableObject {
         translationStatusMessage = "Translating with \(selectedOllamaModel)..."
 
         let prompt = """
-        Translate this English sentence into natural German.
-        Output only the German translation. No notes, no alternatives, no markdown.
+        Translate this \(theirLanguage.name) sentence into natural \(myLanguage.name).
+        Output only the \(myLanguage.name) translation. No notes, no alternatives, no markdown.
 
-        English sentence:
+        \(theirLanguage.name) sentence:
         \(capturedText)
         """
 
@@ -331,7 +363,7 @@ final class DiscoveryStore: ObservableObject {
         detailStatusMessage = "Asking \(selectedOllamaModel)..."
 
         let prompt = """
-        You are helping a German-speaking professional understand English.
+        You are helping a \(myLanguage.speakerDescription) professional understand \(theirLanguage.name).
         Explain the selected word in the exact sentence context.
         Return valid JSON only. No markdown. No code fences.
 
@@ -340,7 +372,7 @@ final class DiscoveryStore: ObservableObject {
           "meaning": "short meaning in isolation",
           "contextualMeaning": "meaning in this exact sentence",
           "tone": "tone and formality guidance",
-          "example": "one natural English example sentence"
+          "example": "one natural \(theirLanguage.name) example sentence"
         }
 
         Original sentence:
@@ -374,15 +406,15 @@ final class DiscoveryStore: ObservableObject {
         composerStatusMessage = "Composing with \(selectedOllamaModel)..."
 
         let prompt = """
-        You are helping a German-speaking professional write natural English.
-        Rewrite the user's thought into three natural English variants.
+        You are helping a \(myLanguage.speakerDescription) professional write natural \(theirLanguage.name).
+        Rewrite the user's thought into three natural \(theirLanguage.name) variants.
         Return valid JSON only. No markdown. No code fences.
 
         Required JSON shape:
         {
-          "casual": "natural casual English",
-          "neutral": "natural neutral English",
-          "professional": "natural professional English"
+          "casual": "natural casual \(theirLanguage.name)",
+          "neutral": "natural neutral \(theirLanguage.name)",
+          "professional": "natural professional \(theirLanguage.name)"
         }
 
         User thought:
@@ -415,8 +447,8 @@ final class DiscoveryStore: ObservableObject {
 
         let intentBlock = intent.isEmpty ? "No native-language explanation was provided." : intent
         let prompt = """
-        You are helping a German-speaking professional improve an English sentence they wrote.
-        Review the English sentence for naturalness, correctness, tone, and whether it expresses the intended meaning.
+        You are helping a \(myLanguage.speakerDescription) professional improve a \(theirLanguage.name) sentence they wrote.
+        Review the \(theirLanguage.name) sentence for naturalness, correctness, tone, and whether it expresses the intended meaning.
         Keep every field concise and concrete. Do not write one big prose paragraph.
         Return valid JSON only. No markdown. No code fences.
 
@@ -439,10 +471,10 @@ final class DiscoveryStore: ObservableObject {
           ]
         }
 
-        English sentence:
+        \(theirLanguage.name) sentence:
         \(sentence)
 
-        What the user tried to express in German or their native language:
+        What the user tried to express in \(myLanguage.name):
         \(intentBlock)
         """
 
@@ -514,6 +546,51 @@ struct WordToken: Identifiable {
 
                 return WordToken(id: index, text: raw, normalized: normalized)
             }
+    }
+}
+
+enum LanguageOption: String, CaseIterable, Identifiable {
+    case english
+    case german
+    case french
+    case spanish
+    case italian
+    case portuguese
+    case dutch
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .english: return "English"
+        case .german: return "German"
+        case .french: return "French"
+        case .spanish: return "Spanish"
+        case .italian: return "Italian"
+        case .portuguese: return "Portuguese"
+        case .dutch: return "Dutch"
+        }
+    }
+
+    var speakerDescription: String {
+        switch self {
+        case .english: return "English-speaking"
+        case .german: return "German-speaking"
+        case .french: return "French-speaking"
+        case .spanish: return "Spanish-speaking"
+        case .italian: return "Italian-speaking"
+        case .portuguese: return "Portuguese-speaking"
+        case .dutch: return "Dutch-speaking"
+        }
+    }
+
+    static func savedValue(forKey key: String, fallback: LanguageOption) -> LanguageOption {
+        guard let rawValue = UserDefaults.standard.string(forKey: key),
+              let language = LanguageOption(rawValue: rawValue) else {
+            return fallback
+        }
+
+        return language
     }
 }
 
@@ -758,13 +835,28 @@ struct AssistantView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Mode", selection: $tab) {
-                ForEach(PrototypeTab.visibleCases) { tab in
-                    Text(tab.title).tag(tab)
+            HStack(spacing: 10) {
+                Picker("Mode", selection: $tab) {
+                    ForEach(PrototypeTab.visibleCases) { tab in
+                        Text(tab.title).tag(tab)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 260)
+
+                Spacer()
+
+                languageMenu("Mine", selection: store.myLanguage) { language in
+                    store.selectMyLanguage(language)
+                }
+
+                languageMenu("Theirs", selection: store.theirLanguage) { language in
+                    store.selectTheirLanguage(language)
+                }
+
+                modelMenu
             }
-            .pickerStyle(.segmented)
-            .padding(14)
+            .padding(12)
 
             Divider()
 
@@ -781,11 +873,58 @@ struct AssistantView: View {
                 SettingsView(store: store)
             }
         }
-        .frame(width: 680, height: 560)
+        .frame(minWidth: 700, minHeight: 440)
         .background(Color(nsColor: .windowBackgroundColor))
         .task {
             await store.refreshOllamaModels()
         }
+    }
+
+    private var modelMenu: some View {
+        Menu {
+            Menu("Ollama") {
+                Button("Refresh Models") {
+                    Task {
+                        await store.refreshOllamaModels()
+                    }
+                }
+
+                Divider()
+
+                if store.ollamaModels.isEmpty {
+                    Text(store.isCheckingOllama ? "Checking..." : "No models found")
+                } else {
+                    ForEach(store.ollamaModels, id: \.self) { model in
+                        Button(model) {
+                            store.selectOllamaModel(model)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Text(store.modelMenuTitle)
+                .lineLimit(1)
+        }
+        .menuStyle(.borderlessButton)
+        .frame(maxWidth: 180)
+    }
+
+    private func languageMenu(
+        _ title: String,
+        selection: LanguageOption,
+        onSelect: @escaping (LanguageOption) -> Void
+    ) -> some View {
+        Menu {
+            ForEach(LanguageOption.allCases) { language in
+                Button(language.name) {
+                    onSelect(language)
+                }
+            }
+        } label: {
+            Text("\(title): \(selection.name)")
+                .lineLimit(1)
+        }
+        .menuStyle(.borderlessButton)
     }
 }
 
@@ -796,7 +935,7 @@ enum PrototypeTab: String, CaseIterable, Identifiable {
     case learn
     case settings
 
-    static let visibleCases: [PrototypeTab] = [.explain, .composer, .review, .settings]
+    static let visibleCases: [PrototypeTab] = [.explain, .composer, .review]
 
     var id: String { rawValue }
 
@@ -840,7 +979,7 @@ struct TranslationSectionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text("German Translation")
+                Text("\(store.myLanguage.name) Translation")
                     .font(.headline)
                 Spacer()
                 if store.isGeneratingTranslation {
@@ -1148,7 +1287,7 @@ struct ComposerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Write a thought in your native language")
+            Text("Write a thought in \(store.myLanguage.name)")
                 .font(.headline)
 
             composerInputRow
@@ -1243,10 +1382,10 @@ struct WritingReviewView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Review your English")
+                Text("Review your \(store.theirLanguage.name)")
                     .font(.headline)
 
-                input("English sentence", text: $store.reviewSentence, height: 42)
+                input("\(store.theirLanguage.name) sentence", text: $store.reviewSentence, height: 42)
                 input("What you meant (optional)", text: $store.reviewIntent, height: 72)
 
                 HStack {
@@ -1767,7 +1906,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if panel == nil {
             let panel = AssistantPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 680, height: 560),
+                contentRect: NSRect(x: 0, y: 0, width: 760, height: 560),
                 styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
                 backing: .buffered,
                 defer: false
@@ -1777,9 +1916,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panel.hidesOnDeactivate = false
             panel.isReleasedWhenClosed = false
             panel.level = .floating
+            panel.minSize = NSSize(width: 700, height: 440)
+            panel.maxSize = NSSize(width: 1200, height: 900)
+            panel.setFrameAutosaveName("ContextDiscovery.AssistantPanel")
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.contentView = NSHostingView(rootView: AssistantView(store: store))
-            panel.center()
+            if UserDefaults.standard.string(forKey: "NSWindow Frame ContextDiscovery.AssistantPanel") == nil {
+                panel.center()
+            }
             self.panel = panel
         }
 

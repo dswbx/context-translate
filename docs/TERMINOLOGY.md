@@ -120,6 +120,8 @@ History is broader than the learning bucket. Not every history item is something
 
 The place where the user controls native language, AI provider, local storage behavior, privacy choices, and model selection.
 
+In the discovery prototype, model and language settings live in the mode bar rather than a separate Settings pane.
+
 ## AI And Privacy
 
 ### AI Provider

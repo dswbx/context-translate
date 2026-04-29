@@ -145,3 +145,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Keep capture controls and capture metadata local to the text pane because they describe the current original text, not the whole app.
 **Next step:** Manually inspect the reduced header layout in the running prototype.
+
+## 2026-04-29 - Moved Settings Into Mode Bar
+
+**Task:** TASK-003
+**Summary:** Made the assistant window resizable with persisted size constraints, moved model selection into a nested Ollama menu in the mode bar, and added persisted Mine/Theirs language pickers.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/TERMINOLOGY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Keep Settings hidden as a mode for now and expose active discovery settings in the mode bar. Use Mine as the user's language and Theirs as the target/source English-language side of the workflow.
+**Next step:** Manually resize the window and verify frame persistence after closing and reopening the app.
