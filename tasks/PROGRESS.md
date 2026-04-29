@@ -208,3 +208,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Keep a narrow visible divider with a wider invisible drag target, and persist the text pane width.
 **Next step:** Manually verify the divider color in light and dark appearance and confirm dragging still feels easy.
+
+## 2026-04-29 - Restored Native Split Interaction
+
+**Task:** TASK-003
+**Summary:** Replaced the custom SwiftUI drag divider with an AppKit split view bridge that keeps native resize cursor behavior and smooth pane resizing while preserving the gray divider color.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Use AppKit for the split interaction because native cursor and resize behavior are part of the expected macOS feel. Keep pane width persistence in the split view delegate.
+**Next step:** Manually verify the cursor changes over the divider and that live dragging no longer distorts pane content.

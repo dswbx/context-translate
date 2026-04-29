@@ -1093,65 +1093,177 @@ enum AssistantWindowMode {
 
 struct ExplanationView: View {
     @ObservedObject var store: DiscoveryStore
-    @AppStorage("ContextDiscovery.ExplainTextPaneWidth") private var storedTextPaneWidth = 360.0
-    @State private var dragStartTextPaneWidth: CGFloat?
 
-    private let minTextPaneWidth = 280.0
-    private let minDetailPaneWidth = 240.0
+    private let textPaneWidthKey = "ContextDiscovery.ExplainTextPaneWidth"
 
     var body: some View {
-        GeometryReader { proxy in
-            HStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        ClickableOriginalText(store: store)
-                        TranslationSectionView(store: store)
-                    }
-                    .padding(18)
+        AppKitSplitView(
+            minLeadingWidth: 280,
+            minTrailingWidth: 240,
+            defaultLeadingWidth: 360,
+            persistedLeadingWidthKey: textPaneWidthKey
+        ) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ClickableOriginalText(store: store)
+                    TranslationSectionView(store: store)
                 }
-                .frame(width: constrainedTextPaneWidth(for: proxy.size.width))
-
-                splitDivider(totalWidth: proxy.size.width)
-
-                PhraseDetailView(store: store)
-                    .frame(minWidth: minDetailPaneWidth, maxWidth: .infinity, maxHeight: .infinity)
+                .padding(18)
             }
+        } trailing: {
+            PhraseDetailView(store: store)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
+}
 
-    private func splitDivider(totalWidth: CGFloat) -> some View {
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(width: 1)
-            .overlay {
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(width: 10)
-                    .contentShape(Rectangle())
+struct AppKitSplitView<Leading: View, Trailing: View>: NSViewRepresentable {
+    let minLeadingWidth: CGFloat
+    let minTrailingWidth: CGFloat
+    let defaultLeadingWidth: CGFloat
+    let persistedLeadingWidthKey: String
+    let leading: Leading
+    let trailing: Trailing
+
+    init(
+        minLeadingWidth: CGFloat,
+        minTrailingWidth: CGFloat,
+        defaultLeadingWidth: CGFloat,
+        persistedLeadingWidthKey: String,
+        @ViewBuilder leading: () -> Leading,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.minLeadingWidth = minLeadingWidth
+        self.minTrailingWidth = minTrailingWidth
+        self.defaultLeadingWidth = defaultLeadingWidth
+        self.persistedLeadingWidthKey = persistedLeadingWidthKey
+        self.leading = leading()
+        self.trailing = trailing()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            minLeadingWidth: minLeadingWidth,
+            minTrailingWidth: minTrailingWidth,
+            defaultLeadingWidth: defaultLeadingWidth,
+            persistedLeadingWidthKey: persistedLeadingWidthKey
+        )
+    }
+
+    func makeNSView(context: Context) -> SeparatorSplitView {
+        let splitView = SeparatorSplitView()
+        splitView.isVertical = true
+        splitView.dividerStyle = .thin
+        splitView.delegate = context.coordinator
+
+        let leadingView = NSHostingView(rootView: leading)
+        let trailingView = NSHostingView(rootView: trailing)
+        leadingView.translatesAutoresizingMaskIntoConstraints = false
+        trailingView.translatesAutoresizingMaskIntoConstraints = false
+
+        splitView.addArrangedSubview(leadingView)
+        splitView.addArrangedSubview(trailingView)
+        context.coordinator.leadingView = leadingView
+        context.coordinator.trailingView = trailingView
+
+        DispatchQueue.main.async {
+            context.coordinator.applyInitialPositionIfPossible(to: splitView)
+        }
+
+        return splitView
+    }
+
+    func updateNSView(_ splitView: SeparatorSplitView, context: Context) {
+        context.coordinator.leadingView?.rootView = leading
+        context.coordinator.trailingView?.rootView = trailing
+        context.coordinator.applyInitialPositionIfPossible(to: splitView)
+    }
+
+    final class Coordinator: NSObject, NSSplitViewDelegate {
+        let minLeadingWidth: CGFloat
+        let minTrailingWidth: CGFloat
+        let defaultLeadingWidth: CGFloat
+        let persistedLeadingWidthKey: String
+        var didApplyInitialPosition = false
+        var leadingView: NSHostingView<Leading>?
+        var trailingView: NSHostingView<Trailing>?
+
+        init(
+            minLeadingWidth: CGFloat,
+            minTrailingWidth: CGFloat,
+            defaultLeadingWidth: CGFloat,
+            persistedLeadingWidthKey: String
+        ) {
+            self.minLeadingWidth = minLeadingWidth
+            self.minTrailingWidth = minTrailingWidth
+            self.defaultLeadingWidth = defaultLeadingWidth
+            self.persistedLeadingWidthKey = persistedLeadingWidthKey
+        }
+
+        func splitView(
+            _ splitView: NSSplitView,
+            constrainMinCoordinate proposedMinimumPosition: CGFloat,
+            ofSubviewAt dividerIndex: Int
+        ) -> CGFloat {
+            minLeadingWidth
+        }
+
+        func splitView(
+            _ splitView: NSSplitView,
+            constrainMaxCoordinate proposedMaximumPosition: CGFloat,
+            ofSubviewAt dividerIndex: Int
+        ) -> CGFloat {
+            max(minLeadingWidth, splitView.bounds.width - minTrailingWidth - splitView.dividerThickness)
+        }
+
+        func splitViewDidResizeSubviews(_ notification: Notification) {
+            guard let splitView = notification.object as? NSSplitView else {
+                return
             }
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        if dragStartTextPaneWidth == nil {
-                            dragStartTextPaneWidth = constrainedTextPaneWidth(for: totalWidth)
-                        }
-                        let startWidth = dragStartTextPaneWidth ?? CGFloat(storedTextPaneWidth)
-                        storedTextPaneWidth = Double(
-                            constrainedTextPaneWidth(startWidth + value.translation.width, totalWidth: totalWidth)
-                        )
-                    }
-                    .onEnded { _ in
-                        dragStartTextPaneWidth = nil
-                    }
-            )
+
+            if !didApplyInitialPosition {
+                applyInitialPositionIfPossible(to: splitView)
+                return
+            }
+
+            saveLeadingWidth(from: splitView)
+        }
+
+        func applyInitialPositionIfPossible(to splitView: NSSplitView) {
+            guard !didApplyInitialPosition,
+                  splitView.bounds.width > minLeadingWidth + minTrailingWidth + splitView.dividerThickness else {
+                return
+            }
+
+            didApplyInitialPosition = true
+            splitView.setPosition(constrainedLeadingWidth(for: splitView), ofDividerAt: 0)
+            saveLeadingWidth(from: splitView)
+        }
+
+        private func constrainedLeadingWidth(for splitView: NSSplitView) -> CGFloat {
+            let savedWidth = UserDefaults.standard.double(forKey: persistedLeadingWidthKey)
+            let preferredWidth = savedWidth > 0 ? CGFloat(savedWidth) : defaultLeadingWidth
+            let maxLeadingWidth = splitView.bounds.width - minTrailingWidth - splitView.dividerThickness
+            return min(max(preferredWidth, minLeadingWidth), maxLeadingWidth)
+        }
+
+        private func saveLeadingWidth(from splitView: NSSplitView) {
+            guard let leadingView = splitView.arrangedSubviews.first else {
+                return
+            }
+
+            UserDefaults.standard.set(Double(leadingView.frame.width), forKey: persistedLeadingWidthKey)
+        }
+    }
+}
+
+final class SeparatorSplitView: NSSplitView {
+    override var dividerColor: NSColor {
+        .separatorColor
     }
 
-    private func constrainedTextPaneWidth(for totalWidth: CGFloat) -> CGFloat {
-        constrainedTextPaneWidth(CGFloat(storedTextPaneWidth), totalWidth: totalWidth)
-    }
-
-    private func constrainedTextPaneWidth(_ width: CGFloat, totalWidth: CGFloat) -> CGFloat {
-        max(minTextPaneWidth, min(width, totalWidth - minDetailPaneWidth - 1))
+    override var dividerThickness: CGFloat {
+        1
     }
 }
 
