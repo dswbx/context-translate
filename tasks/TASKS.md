@@ -18,7 +18,7 @@
 
 ### TASK-002: Discovery Prototype Brief
 
-**Status:** active
+**Status:** done
 **Owner type:** agent with product review
 **Goal:** Turn `docs/DISCOVERY.md` into a concrete prototype brief before coding the Swift experiment.
 **Acceptance criteria:**
@@ -30,7 +30,7 @@
 
 ### TASK-003: One-Shot Swift Discovery Prototype
 
-**Status:** not-started
+**Status:** active
 **Owner type:** agent
 **Goal:** Create a disposable Swift/SwiftUI macOS prototype under `experiments/swift-discovery/`.
 **Acceptance criteria:**

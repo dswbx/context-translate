@@ -20,6 +20,52 @@ The prototype should attempt:
 - lightweight local sample history or learning bucket
 - stubbed LLM responses
 
+## Prototype Brief
+
+Build a small Swift Package executable that launches a native macOS accessory app.
+
+### Must-Have Behaviors
+
+- Show a menu bar item named `Context`.
+- Provide a menu action for opening the assistant.
+- Register a best-effort global shortcut: `Command+Option+E`.
+- Read text from the clipboard as the selected-text fallback.
+- Open a fast floating panel with the captured text.
+- Show a translation-first explanation screen with selectable phrase chips.
+- Show phrase details with meaning, contextual meaning, tone, examples, and a save action.
+- Include a composer screen with casual, neutral, and professional stub outputs.
+- Include a lightweight history/review screen backed by in-memory sample data.
+
+### Stubbed Data
+
+- German is the default native language for the prototype.
+- AI responses are deterministic local stubs.
+- Phrase examples should use workplace English.
+- History and learning bucket data can reset when the app quits.
+
+### Run Expectation
+
+Run from this directory:
+
+```bash
+swift run
+```
+
+Expected behavior:
+
+- The app appears in the macOS menu bar.
+- Choosing `Open Assistant` opens a floating assistant panel.
+- Copying English text to the clipboard before opening the assistant populates the explanation flow.
+- Pressing `Command+Option+E` opens the same panel when the hotkey registration works.
+
+### Product Review Questions
+
+- Does clipboard fallback feel acceptable for discovery?
+- Does the floating panel feel like the right surface?
+- Is translation-first helpful before phrase details?
+- Are phrase chips a good way to ask for deeper explanation?
+- Should composer live beside explanation, or as a separate mode?
+
 ## Non-Goals
 
 - production architecture

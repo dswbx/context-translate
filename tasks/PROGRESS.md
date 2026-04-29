@@ -19,3 +19,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** Required file existence checks; unfinished-marker scan.
 **Decisions made:** TASK-002 is now active and will brief the disposable Swift discovery prototype.
 **Next step:** Execute TASK-002.
+
+## 2026-04-29 - Swift Discovery Prototype Started
+
+**Task:** TASK-002, TASK-003
+**Summary:** Added the discovery prototype brief and created a runnable SwiftPM macOS accessory app prototype with menu bar entry, floating panel, clipboard fallback, phrase explanation, composer, and review screens.
+**Files changed:** `experiments/swift-discovery/README.md`, `experiments/swift-discovery/Package.swift`, `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/TASKS.md`, `tasks/CURRENT.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`, `swift run`
+**Decisions made:** Continue discovery with SwiftPM for now; full Xcode is not required until the prototype needs Xcode-specific app project behavior.
+**Next step:** Product owner tests the running prototype and reports what feels useful, awkward, or missing.

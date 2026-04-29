@@ -68,6 +68,22 @@ Add entries in this format:
 **Carry forward:** Yes or no.
 ```
 
+### 2026-04-29 - SwiftPM Can Launch A Native Menu Bar Prototype
+
+**Area:** macOS app shape
+**Observed:** A Swift Package executable can build and launch an AppKit/SwiftUI accessory app with a menu bar item, floating panel, clipboard fallback, and stubbed explanation/composer/review flows.
+**Why it matters:** The discovery prototype does not require a full Xcode project yet. This keeps iteration lightweight while still testing real macOS window and menu behavior.
+**Recommendation:** Continue discovery in `experiments/swift-discovery/` with SwiftPM until signing, previews, asset catalogs, or Xcode-specific project behavior becomes necessary.
+**Carry forward:** Yes.
+
+### 2026-04-29 - SwiftPM Needs Normal User Cache Access
+
+**Area:** build tooling
+**Observed:** The first sandboxed build could not write SwiftPM and Clang module caches. Running `swift build` with normal user cache access succeeded.
+**Why it matters:** Future agents should expect SwiftPM builds to use user cache directories outside the repository.
+**Recommendation:** Use normal local execution for SwiftPM build/run commands. If full Xcode is needed later, ask the product owner before switching.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

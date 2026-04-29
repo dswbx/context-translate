@@ -2,17 +2,17 @@
 
 ## Active Task
 
-**Task ID:** TASK-002
+**Task ID:** TASK-003
 **Status:** active
-**Title:** Discovery Prototype Brief
+**Title:** One-Shot Swift Discovery Prototype
 
 ## Current Checkpoint
 
-Prepare a concrete brief for the one-shot Swift/SwiftUI discovery prototype.
+Test the runnable Swift/SwiftUI discovery prototype and record what feels right or wrong.
 
 ## Immediate Next Step
 
-Define the prototype's must-have behaviors, stubbed data, run expectations, and product review questions.
+Have the product owner try the running prototype from the menu bar, clipboard fallback, hotkey, explanation, composer, and review screens.
 
 ## Blockers
 
@@ -20,8 +20,8 @@ None.
 
 ## Discovery Notes
 
-The prototype should test real macOS behavior before the production MVP is planned. It should be disposable by default.
+The prototype builds and runs via `swift run` in `experiments/swift-discovery/`. It should stay disposable by default.
 
 ## Handoff Notes
 
-Use `docs/DISCOVERY.md` and `experiments/swift-discovery/README.md` as the source of truth for the prototype brief.
+Record product feedback and macOS behavior findings in `docs/DISCOVERY.md`.
