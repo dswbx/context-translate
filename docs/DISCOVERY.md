@@ -132,6 +132,22 @@ Add entries in this format:
 **Recommendation:** Keep Ollama as the first provider path. If Ollama is unavailable, show a clear local status message instead of failing silently.
 **Carry forward:** Yes.
 
+### 2026-04-29 - Translation And Word Details Need Separate Prompts
+
+**Area:** AI
+**Observed:** Product feedback clarified that German translation and word details should both come from the selected model, not local placeholder data.
+**Why it matters:** Translation wants a narrow prompt with no extra output, while word details need structured fields for meaning, context, tone, and example. Treating them as separate prompt cases keeps the UI predictable.
+**Recommendation:** Use dedicated prompts per response type. For translation: ask for only the German sentence. For word details: ask for structured JSON and map those fields directly into the details pane.
+**Carry forward:** Yes.
+
+### 2026-04-29 - In-Flight AI Needs Manual Control
+
+**Area:** AI
+**Observed:** Regenerate and Stop controls are needed once local generation can be slow.
+**Why it matters:** Users need control when a model is too slow, stuck, or answering with the wrong model.
+**Recommendation:** Keep generation tasks cancellable and expose explicit Regenerate and Stop actions near the generated content.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

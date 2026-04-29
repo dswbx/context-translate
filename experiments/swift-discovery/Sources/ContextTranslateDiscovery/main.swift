@@ -8,44 +8,63 @@ final class DiscoveryStore: ObservableObject {
     @Published var capturedText: String
     @Published var selectedPhrase: PhraseExplanation?
     @Published var selectedTokenID: Int?
+    @Published var selectedWordText: String?
     @Published var savedPhrases: [PhraseExplanation]
     @Published var composerInput: String
     @Published var composerOutputs: ComposerOutputs
+    @Published var germanTranslation: String
+    @Published var translationStatusMessage: String
     @Published var ollamaModels: [String]
     @Published var selectedOllamaModel: String
     @Published var ollamaStatusMessage: String
     @Published var isCheckingOllama: Bool
-    @Published var isGeneratingAI: Bool
-    @Published var aiExplanation: String?
+    @Published var isGeneratingTranslation: Bool
+    @Published var isGeneratingDetail: Bool
+    @Published var detailStatusMessage: String
 
     private let selectedModelKey = "ContextDiscovery.SelectedOllamaModel"
+    private var selectedToken: WordToken?
+    private var translationTask: Task<Void, Never>?
+    private var detailTask: Task<Void, Never>?
 
     init(capturedText: String) {
         self.capturedText = capturedText
         self.selectedPhrase = nil
         self.selectedTokenID = nil
+        self.selectedWordText = nil
         self.savedPhrases = [PhraseExplanation.sampleLearningItem]
         self.composerInput = "damit wir uns spaeter keine Steine in den Weg legen"
         self.composerOutputs = ComposerOutputs.generate(
             from: "damit wir uns spaeter keine Steine in den Weg legen"
         )
+        self.germanTranslation = StubTranslator.translate(capturedText)
+        self.translationStatusMessage = "Using stubbed translation until a local model is selected."
         self.ollamaModels = []
         self.selectedOllamaModel = UserDefaults.standard.string(forKey: selectedModelKey) ?? ""
         self.ollamaStatusMessage = "Ollama has not been checked yet."
         self.isCheckingOllama = false
-        self.isGeneratingAI = false
-        self.aiExplanation = nil
+        self.isGeneratingTranslation = false
+        self.isGeneratingDetail = false
+        self.detailStatusMessage = "Click a word to explain it."
     }
 
     var translatedText: String {
-        StubTranslator.translate(capturedText)
+        germanTranslation
     }
 
     func replaceCapturedText(_ text: String) {
+        stopAIResponses()
         capturedText = text.isEmpty ? StubTranslator.defaultSourceText : text
         selectedPhrase = nil
         selectedTokenID = nil
-        aiExplanation = nil
+        selectedWordText = nil
+        selectedToken = nil
+        germanTranslation = StubTranslator.translate(capturedText)
+        translationStatusMessage = selectedOllamaModel.isEmpty ? "Using stubbed translation until a local model is selected." : "Ready to translate with \(selectedOllamaModel)."
+        detailStatusMessage = "Click a word to explain it."
+        if !selectedOllamaModel.isEmpty {
+            regenerateAIResponses()
+        }
     }
 
     var wordTokens: [WordToken] {
@@ -53,14 +72,18 @@ final class DiscoveryStore: ObservableObject {
     }
 
     func selectWord(_ token: WordToken) {
+        detailTask?.cancel()
+        detailTask = nil
         selectedTokenID = token.id
-        aiExplanation = nil
-        selectedPhrase = PhraseExplanation.explain(word: token.normalized, visibleWord: token.text, context: capturedText)
+        selectedWordText = token.text
+        selectedToken = token
 
-        if !selectedOllamaModel.isEmpty {
-            Task {
-                await generateAIExplanation(for: token)
-            }
+        if selectedOllamaModel.isEmpty {
+            selectedPhrase = PhraseExplanation.explain(word: token.normalized, visibleWord: token.text, context: capturedText)
+            detailStatusMessage = "Using stubbed details until a local model is selected."
+        } else {
+            selectedPhrase = nil
+            generateAIDetail(for: token)
         }
     }
 
@@ -81,6 +104,8 @@ final class DiscoveryStore: ObservableObject {
     func selectOllamaModel(_ model: String) {
         selectedOllamaModel = model
         UserDefaults.standard.set(model, forKey: selectedModelKey)
+        translationStatusMessage = "Selected \(model)."
+        regenerateAIResponses()
     }
 
     func refreshOllamaModels() async {
@@ -119,36 +144,117 @@ final class DiscoveryStore: ObservableObject {
         }
     }
 
-    func generateAIExplanation(for token: WordToken) async {
+    func regenerateAIResponses() {
+        stopAIResponses()
+
         guard !selectedOllamaModel.isEmpty else {
-            aiExplanation = "Choose a local Ollama model in Settings to use real AI responses."
+            germanTranslation = StubTranslator.translate(capturedText)
+            translationStatusMessage = "Choose a local Ollama model in Settings to use real AI responses."
+            if let selectedToken {
+                selectedPhrase = PhraseExplanation.explain(word: selectedToken.normalized, visibleWord: selectedToken.text, context: capturedText)
+                detailStatusMessage = "Using stubbed details until a local model is selected."
+            }
             return
         }
 
-        isGeneratingAI = true
-        defer { isGeneratingAI = false }
-
-        guard let url = URL(string: "http://localhost:11434/api/generate") else {
-            aiExplanation = "Ollama URL is invalid."
-            return
+        generateAITranslation()
+        if let selectedToken {
+            selectedPhrase = nil
+            generateAIDetail(for: selectedToken)
         }
+    }
+
+    func stopAIResponses() {
+        translationTask?.cancel()
+        detailTask?.cancel()
+        translationTask = nil
+        detailTask = nil
+        isGeneratingTranslation = false
+        isGeneratingDetail = false
+        if !selectedOllamaModel.isEmpty {
+            translationStatusMessage = "Stopped."
+            detailStatusMessage = selectedWordText == nil ? "Click a word to explain it." : "Stopped."
+        }
+    }
+
+    private func generateAITranslation() {
+        translationTask?.cancel()
+        isGeneratingTranslation = true
+        translationStatusMessage = "Translating with \(selectedOllamaModel)..."
+
+        let prompt = """
+        Translate this English sentence into natural German.
+        Output only the German translation. No notes, no alternatives, no markdown.
+
+        English sentence:
+        \(capturedText)
+        """
+
+        translationTask = Task {
+            do {
+                let response = try await askOllama(prompt: prompt)
+                guard !Task.isCancelled else { return }
+                germanTranslation = response
+                translationStatusMessage = "Translated with \(selectedOllamaModel)."
+            } catch is CancellationError {
+                translationStatusMessage = "Translation stopped."
+            } catch {
+                germanTranslation = StubTranslator.translate(capturedText)
+                translationStatusMessage = "Could not reach Ollama. Showing stubbed translation."
+            }
+            isGeneratingTranslation = false
+            translationTask = nil
+        }
+    }
+
+    private func generateAIDetail(for token: WordToken) {
+        detailTask?.cancel()
+        isGeneratingDetail = true
+        detailStatusMessage = "Asking \(selectedOllamaModel)..."
 
         let prompt = """
         You are helping a German-speaking professional understand English.
-        Explain the selected word in concise, practical language.
+        Explain the selected word in the exact sentence context.
+        Return valid JSON only. No markdown. No code fences.
+
+        Required JSON shape:
+        {
+          "meaning": "short meaning in isolation",
+          "contextualMeaning": "meaning in this exact sentence",
+          "tone": "tone and formality guidance",
+          "example": "one natural English example sentence"
+        }
 
         Original sentence:
         \(capturedText)
 
         Selected word:
         \(token.text)
-
-        Return:
-        - Meaning
-        - Meaning in this exact context
-        - Tone/formality
-        - One natural example sentence
         """
+
+        detailTask = Task {
+            do {
+                let response = try await askOllama(prompt: prompt)
+                guard !Task.isCancelled else { return }
+                selectedPhrase = PhraseExplanation.fromModelResponse(response, fallbackWord: token.text)
+                detailStatusMessage = "Generated with \(selectedOllamaModel)."
+            } catch is CancellationError {
+                detailStatusMessage = "Explanation stopped."
+            } catch {
+                selectedPhrase = PhraseExplanation.explain(word: token.normalized, visibleWord: token.text, context: capturedText)
+                detailStatusMessage = "Could not reach Ollama. Showing stubbed details."
+            }
+            isGeneratingDetail = false
+            detailTask = nil
+        }
+    }
+
+    private func askOllama(prompt: String) async throws -> String {
+        guard let url = URL(string: "http://localhost:11434/api/generate") else {
+            throw URLError(.badURL)
+        }
+
+        try Task.checkCancellation()
 
         let requestBody = OllamaGenerateRequest(
             model: selectedOllamaModel,
@@ -156,23 +262,20 @@ final class DiscoveryStore: ObservableObject {
             stream: false
         )
 
-        do {
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONEncoder().encode(requestBody)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(requestBody)
 
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                aiExplanation = "Ollama did not return a usable response."
-                return
-            }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try Task.checkCancellation()
 
-            let result = try JSONDecoder().decode(OllamaGenerateResponse.self, from: data)
-            aiExplanation = result.response.trimmingCharacters(in: .whitespacesAndNewlines)
-        } catch {
-            aiExplanation = "Could not reach Ollama. Start Ollama, then refresh models in Settings."
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
         }
+
+        let result = try JSONDecoder().decode(OllamaGenerateResponse.self, from: data)
+        return result.response.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
@@ -215,6 +318,13 @@ struct OllamaGenerateRequest: Encodable {
 
 struct OllamaGenerateResponse: Decodable {
     let response: String
+}
+
+struct AIWordExplanation: Decodable {
+    let meaning: String
+    let contextualMeaning: String
+    let tone: String
+    let example: String
 }
 
 struct PhraseExplanation: Identifiable, Equatable {
@@ -288,6 +398,33 @@ struct PhraseExplanation: Identifiable, Equatable {
             example: "The missing API key is the only blocker right now."
         )
     ]
+
+    static func fromModelResponse(_ response: String, fallbackWord: String) -> PhraseExplanation {
+        let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
+        let jsonText = trimmed
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let data = jsonText.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(AIWordExplanation.self, from: data) {
+            return PhraseExplanation(
+                phrase: fallbackWord,
+                meaning: decoded.meaning,
+                contextualMeaning: decoded.contextualMeaning,
+                tone: decoded.tone,
+                example: decoded.example
+            )
+        }
+
+        return PhraseExplanation(
+            phrase: fallbackWord,
+            meaning: trimmed,
+            contextualMeaning: "The local model returned an unstructured response.",
+            tone: "Ask again or try a stronger local model for cleaner structure.",
+            example: "The generated response above is preserved as-is."
+        )
+    }
 }
 
 struct ComposerOutputs {
@@ -411,8 +548,14 @@ struct ExplanationView: View {
         HStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    AIControlsView(store: store)
                     ClickableOriginalText(store: store)
-                    section("German Translation", text: store.translatedText)
+                    section(
+                        "German Translation",
+                        text: store.translatedText,
+                        status: store.translationStatusMessage,
+                        isLoading: store.isGeneratingTranslation
+                    )
                 }
                 .padding(18)
             }
@@ -425,10 +568,17 @@ struct ExplanationView: View {
         }
     }
 
-    private func section(_ title: String, text: String) -> some View {
+    private func section(_ title: String, text: String, status: String? = nil, isLoading: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(.headline)
+            HStack {
+                Text(title)
+                    .font(.headline)
+                Spacer()
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
             Text(text)
                 .font(.body)
                 .textSelection(.enabled)
@@ -436,7 +586,45 @@ struct ExplanationView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(nsColor: .controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+            if let status {
+                Text(status)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
+    }
+}
+
+struct AIControlsView: View {
+    @ObservedObject var store: DiscoveryStore
+
+    var body: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(store.selectedOllamaModel.isEmpty ? "AI: Stub fallback" : "AI: \(store.selectedOllamaModel)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(store.ollamaStatusMessage)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Button("Regenerate") {
+                store.regenerateAIResponses()
+            }
+            .disabled(store.selectedOllamaModel.isEmpty || store.isGeneratingTranslation || store.isGeneratingDetail)
+
+            Button("Stop") {
+                store.stopAIResponses()
+            }
+            .disabled(!store.isGeneratingTranslation && !store.isGeneratingDetail)
+        }
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -467,7 +655,7 @@ struct WrappingWords: View {
     let onSelect: (WordToken) -> Void
 
     var body: some View {
-        WordWrapLayout(horizontalSpacing: 3, verticalSpacing: 3) {
+        WordWrapLayout(horizontalSpacing: 0, verticalSpacing: 3) {
             ForEach(tokens) { token in
                 WordButton(
                     token: token,
@@ -492,8 +680,8 @@ struct WordButton: View {
             Text(token.text)
                 .font(.body)
                 .foregroundStyle(isSelected ? Color.white : Color.primary)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
+                .padding(.horizontal, 2)
+                .padding(.vertical, 1)
                 .background(background)
                 .clipShape(RoundedRectangle(cornerRadius: 5))
                 .fixedSize()
@@ -613,14 +801,7 @@ struct PhraseDetailView: View {
                     detail("In this context", phrase.contextualMeaning)
                     detail("Tone", phrase.tone)
                     detail("Example", phrase.example)
-
-                    if store.isGeneratingAI {
-                        ProgressView("Asking \(store.selectedOllamaModel)...")
-                    } else if let aiExplanation = store.aiExplanation, !aiExplanation.isEmpty {
-                        detail("Ollama", aiExplanation)
-                    } else if store.selectedOllamaModel.isEmpty {
-                        detail("AI", "Using stubbed explanation. Choose a local Ollama model in Settings for real AI responses.")
-                    }
+                    detail("Source", store.detailStatusMessage)
 
                     Spacer()
 
@@ -629,6 +810,27 @@ struct PhraseDetailView: View {
                     }
                     .buttonStyle(.borderedProminent)
                 }
+            } else if store.isGeneratingDetail {
+                VStack(spacing: 8) {
+                    Spacer()
+                    ProgressView(store.detailStatusMessage)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let selectedWordText = store.selectedWordText {
+                VStack(spacing: 8) {
+                    Spacer()
+                    Text(selectedWordText)
+                        .font(.system(size: 18, weight: .semibold))
+                    Text(store.detailStatusMessage)
+                        .font(.system(size: 12))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                        .opacity(0.7)
+                        .frame(maxWidth: 260)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(spacing: 8) {
                     Spacer()
