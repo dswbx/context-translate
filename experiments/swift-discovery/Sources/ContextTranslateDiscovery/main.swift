@@ -938,9 +938,14 @@ struct ComposerView: View {
                 }
             }
 
-            TextEditor(text: $store.composerInput)
+            TextField("", text: $store.composerInput)
                 .font(.body)
-                .frame(height: 72)
+                .textFieldStyle(.plain)
+                .onSubmit {
+                    store.compose()
+                }
+                .padding(8)
+                .frame(height: 34)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(Color(nsColor: .separatorColor))
@@ -971,9 +976,20 @@ struct ComposerView: View {
 
     private func output(_ title: String, _ text: String, isPlaceholder: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    ClipboardWriter.copy(text)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+                .disabled(isPlaceholder || text.isEmpty)
+                .help("Copy \(title.lowercased()) variant")
+            }
             Text(text)
                 .foregroundStyle(isPlaceholder ? Color.secondary.opacity(0.65) : Color.primary)
                 .textSelection(.enabled)
@@ -1099,6 +1115,13 @@ enum ClipboardReader {
     }
 }
 
+enum ClipboardWriter {
+    static func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var panel: NSPanel?
@@ -1109,6 +1132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
         store = DiscoveryStore(capturedText: ClipboardReader.readText())
+        setupApplicationMenu()
         NSApp.setActivationPolicy(.accessory)
         setupMenuBar()
         registerHotKey()
@@ -1122,6 +1146,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let hotKeyHandler {
             RemoveEventHandler(hotKeyHandler)
         }
+    }
+
+    @MainActor
+    private func setupApplicationMenu() {
+        let mainMenu = NSMenu()
+
+        let appMenuItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(NSMenuItem(title: "Quit Context", action: #selector(quit), keyEquivalent: "q"))
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
+        editMenu.addItem(NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z"))
+        editMenu.addItem(.separator())
+        editMenu.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(.separator())
+        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+
+        NSApp.mainMenu = mainMenu
     }
 
     @MainActor
