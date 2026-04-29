@@ -177,6 +177,14 @@ Add entries in this format:
 **Recommendation:** When a panel hides its titlebar, explicitly let the SwiftUI root ignore the top container safe area. Persist the bubble size separately from the normal window so users can tune the floating surface without losing contextual placement.
 **Carry forward:** Yes.
 
+### 2026-04-29 - Bubble Should Feel Like A Native Floating Surface
+
+**Area:** windowing
+**Observed:** The shortcut bubble benefits from a subtle translucent material because it appears on top of arbitrary user content. The Explain view also needs an adjustable divider because the useful balance between original text and detail changes by task.
+**Why it matters:** A floating assistant needs to feel lightweight without sacrificing legibility. Users also need control over whether they are reading more context or more explanation.
+**Recommendation:** Use native vibrancy/translucency only for the bubble window, keep the normal window opaque, and use a native split view for adjustable text and detail panes.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

@@ -190,3 +190,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Recalculate bubble position on each shortcut open, but preserve the user's chosen bubble width and height.
 **Next step:** Manually resize the bubble, close it by clicking outside, reopen with Cmd+Option+E, and confirm the size is retained near the new selection.
+
+## 2026-04-29 - Added Bubble Translucency And Split Panes
+
+**Task:** TASK-003
+**Summary:** Made the shortcut bubble use a subtle translucent native material and changed the Explain view's text/detail layout to a draggable split view.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Keep translucency scoped to the shortcut bubble. Keep the normal assistant window opaque. Let users resize the text and detail panes with the native split divider.
+**Next step:** Manually verify bubble legibility over light and dark backgrounds, then test dragging the Explain divider at compact and expanded bubble sizes.

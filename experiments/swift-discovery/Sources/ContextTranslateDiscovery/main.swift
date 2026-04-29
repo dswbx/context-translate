@@ -878,7 +878,7 @@ struct AssistantView: View {
             }
         }
         .frame(minWidth: mode.minSize.width, minHeight: mode.minSize.height)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .assistantBackground(mode)
         .bubbleChromeAdjustment(mode)
         .task {
             await store.refreshOllamaModels()
@@ -957,12 +957,42 @@ enum PrototypeTab: String, CaseIterable, Identifiable {
 
 extension View {
     @ViewBuilder
+    func assistantBackground(_ mode: AssistantWindowMode) -> some View {
+        if mode.usesTranslucentBackground {
+            self.background {
+                VisualEffectBackground(material: .hudWindow, blendingMode: .behindWindow)
+            }
+        } else {
+            self.background(Color(nsColor: .windowBackgroundColor))
+        }
+    }
+
+    @ViewBuilder
     func bubbleChromeAdjustment(_ mode: AssistantWindowMode) -> some View {
         if mode.hidesTitleBar {
             self.ignoresSafeArea(.container, edges: .top)
         } else {
             self
         }
+    }
+}
+
+struct VisualEffectBackground: NSViewRepresentable {
+    let material: NSVisualEffectView.Material
+    let blendingMode: NSVisualEffectView.BlendingMode
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
     }
 }
 
@@ -1050,13 +1080,22 @@ enum AssistantWindowMode {
             return "ContextDiscovery.BubblePanel.size"
         }
     }
+
+    var usesTranslucentBackground: Bool {
+        switch self {
+        case .normal:
+            return false
+        case .bubble:
+            return true
+        }
+    }
 }
 
 struct ExplanationView: View {
     @ObservedObject var store: DiscoveryStore
 
     var body: some View {
-        HStack(spacing: 0) {
+        HSplitView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     ClickableOriginalText(store: store)
@@ -1064,12 +1103,10 @@ struct ExplanationView: View {
                 }
                 .padding(18)
             }
-            .frame(width: 360)
-
-            Divider()
+            .frame(minWidth: 280, idealWidth: 360, maxWidth: .infinity)
 
             PhraseDetailView(store: store)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -2173,6 +2210,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.level = .floating
         panel.minSize = mode.minSize
         panel.maxSize = mode.maxSize
+        panel.isOpaque = !mode.usesTranslucentBackground
+        panel.backgroundColor = mode.usesTranslucentBackground ? .clear : .windowBackgroundColor
         if let autosaveName = mode.autosaveName {
             panel.setFrameAutosaveName(autosaveName)
         }
