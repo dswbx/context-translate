@@ -82,3 +82,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** Documentation-only change.
 **Decisions made:** Use "original text", "selected term", "explanation", "text pane", "explanation pane", "learning bucket", "discovery prototype", and related terms consistently.
 **Next step:** Use the terminology doc when naming UI elements, tasks, and future implementation types.
+
+## 2026-04-29 - Refined Explain Pane AI Controls
+
+**Task:** TASK-003
+**Summary:** Removed stub translation output, moved translation refresh/stop controls into the translation heading, and added explanation-pane refresh/stop controls with stable loading placeholders for known fields.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Translation and explanation controls act independently. Detail generation remains one Ollama request that returns all fields together, while the UI keeps the selected word and field headings visible during loading.
+**Next step:** Run the prototype with Ollama available and verify refresh/stop behavior in both panes.

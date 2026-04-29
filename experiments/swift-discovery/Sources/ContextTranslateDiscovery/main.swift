@@ -37,8 +37,8 @@ final class DiscoveryStore: ObservableObject {
         self.composerOutputs = ComposerOutputs.generate(
             from: "damit wir uns spaeter keine Steine in den Weg legen"
         )
-        self.germanTranslation = StubTranslator.translate(capturedText)
-        self.translationStatusMessage = "Using stubbed translation until a local model is selected."
+        self.germanTranslation = ""
+        self.translationStatusMessage = "Choose a local Ollama model in Settings to translate."
         self.ollamaModels = []
         self.selectedOllamaModel = UserDefaults.standard.string(forKey: selectedModelKey) ?? ""
         self.ollamaStatusMessage = "Ollama has not been checked yet."
@@ -54,13 +54,13 @@ final class DiscoveryStore: ObservableObject {
 
     func replaceCapturedText(_ text: String) {
         stopAIResponses()
-        capturedText = text.isEmpty ? StubTranslator.defaultSourceText : text
+        capturedText = text.isEmpty ? SampleText.defaultSourceText : text
         selectedPhrase = nil
         selectedTokenID = nil
         selectedWordText = nil
         selectedToken = nil
-        germanTranslation = StubTranslator.translate(capturedText)
-        translationStatusMessage = selectedOllamaModel.isEmpty ? "Using stubbed translation until a local model is selected." : "Ready to translate with \(selectedOllamaModel)."
+        germanTranslation = ""
+        translationStatusMessage = selectedOllamaModel.isEmpty ? "Choose a local Ollama model in Settings to translate." : "Ready to translate with \(selectedOllamaModel)."
         detailStatusMessage = "Click a word to explain it."
         if !selectedOllamaModel.isEmpty {
             regenerateAIResponses()
@@ -79,8 +79,8 @@ final class DiscoveryStore: ObservableObject {
         selectedToken = token
 
         if selectedOllamaModel.isEmpty {
-            selectedPhrase = PhraseExplanation.explain(word: token.normalized, visibleWord: token.text, context: capturedText)
-            detailStatusMessage = "Using stubbed details until a local model is selected."
+            selectedPhrase = nil
+            detailStatusMessage = "Choose a local Ollama model in Settings to explain this word."
         } else {
             selectedPhrase = nil
             generateAIDetail(for: token)
@@ -146,33 +146,52 @@ final class DiscoveryStore: ObservableObject {
 
     func regenerateAIResponses() {
         stopAIResponses()
+        regenerateTranslation()
+        regenerateSelectedDetail()
+    }
 
+    func regenerateTranslation() {
+        stopTranslation()
         guard !selectedOllamaModel.isEmpty else {
-            germanTranslation = StubTranslator.translate(capturedText)
+            germanTranslation = ""
             translationStatusMessage = "Choose a local Ollama model in Settings to use real AI responses."
-            if let selectedToken {
-                selectedPhrase = PhraseExplanation.explain(word: selectedToken.normalized, visibleWord: selectedToken.text, context: capturedText)
-                detailStatusMessage = "Using stubbed details until a local model is selected."
-            }
             return
         }
 
         generateAITranslation()
+    }
+
+    func regenerateSelectedDetail() {
+        stopDetail()
         if let selectedToken {
             selectedPhrase = nil
+            guard !selectedOllamaModel.isEmpty else {
+                detailStatusMessage = "Choose a local Ollama model in Settings to explain this word."
+                return
+            }
             generateAIDetail(for: selectedToken)
         }
     }
 
     func stopAIResponses() {
+        stopTranslation()
+        stopDetail()
+    }
+
+    func stopTranslation() {
         translationTask?.cancel()
-        detailTask?.cancel()
         translationTask = nil
-        detailTask = nil
         isGeneratingTranslation = false
-        isGeneratingDetail = false
         if !selectedOllamaModel.isEmpty {
             translationStatusMessage = "Stopped."
+        }
+    }
+
+    func stopDetail() {
+        detailTask?.cancel()
+        detailTask = nil
+        isGeneratingDetail = false
+        if !selectedOllamaModel.isEmpty {
             detailStatusMessage = selectedWordText == nil ? "Click a word to explain it." : "Stopped."
         }
     }
@@ -199,8 +218,8 @@ final class DiscoveryStore: ObservableObject {
             } catch is CancellationError {
                 translationStatusMessage = "Translation stopped."
             } catch {
-                germanTranslation = StubTranslator.translate(capturedText)
-                translationStatusMessage = "Could not reach Ollama. Showing stubbed translation."
+                germanTranslation = ""
+                translationStatusMessage = "Could not reach Ollama. Check that the local server is running."
             }
             isGeneratingTranslation = false
             translationTask = nil
@@ -241,8 +260,8 @@ final class DiscoveryStore: ObservableObject {
             } catch is CancellationError {
                 detailStatusMessage = "Explanation stopped."
             } catch {
-                selectedPhrase = PhraseExplanation.explain(word: token.normalized, visibleWord: token.text, context: capturedText)
-                detailStatusMessage = "Could not reach Ollama. Showing stubbed details."
+                selectedPhrase = nil
+                detailStatusMessage = "Could not reach Ollama. Check that the local server is running."
             }
             isGeneratingDetail = false
             detailTask = nil
@@ -344,51 +363,6 @@ struct PhraseExplanation: Identifiable, Equatable {
             example: "I want to make sure we're on the same page before I send the proposal."
         )
 
-    static func explain(word: String, visibleWord: String, context: String) -> PhraseExplanation {
-        switch word {
-        case "circle":
-            return PhraseExplanation(
-                phrase: visibleWord,
-                meaning: "As a verb, it can mean to move around something. In workplace English it often appears in the phrase 'circle back'.",
-                contextualMeaning: "Here it probably belongs to 'circle back', meaning return to the topic later.",
-                tone: "Workplace-friendly; slightly corporate.",
-                example: "Let's circle back after lunch."
-            )
-        case "back":
-            return PhraseExplanation(
-                phrase: visibleWord,
-                meaning: "Return, reverse direction, or support someone depending on context.",
-                contextualMeaning: "With 'circle', it forms 'circle back': return to a topic later.",
-                tone: "Neutral. The phrase 'circle back' is common in meetings.",
-                example: "I'll get the numbers and circle back tomorrow."
-            )
-        case "blocker", "blockers":
-            return PhraseExplanation(
-                phrase: visibleWord,
-                meaning: "Something that prevents progress.",
-                contextualMeaning: "The issue needs attention before work can continue.",
-                tone: "Direct, common in technical and project teams.",
-                example: "The missing API key is the only blocker right now."
-            )
-        case "same", "page":
-            return PhraseExplanation(
-                phrase: visibleWord,
-                meaning: "Part of the phrase 'on the same page', meaning shared understanding.",
-                contextualMeaning: "The speaker wants everyone aligned before moving forward.",
-                tone: "Friendly and professional.",
-                example: "I want to make sure we're on the same page before I send the proposal."
-            )
-        default:
-            return PhraseExplanation(
-                phrase: visibleWord,
-                meaning: "Stub explanation for this word.",
-                contextualMeaning: "In this sentence, '\(visibleWord)' contributes to the overall message: \(context)",
-                tone: "Tone needs real AI analysis in the production version.",
-                example: "Try this word in a short workplace sentence to test whether it feels natural."
-            )
-        }
-    }
-
     static let samplePhrases = [
         PhraseExplanation(
             phrase: "blocker",
@@ -450,21 +424,8 @@ struct ComposerOutputs {
     }
 }
 
-enum StubTranslator {
+enum SampleText {
     static let defaultSourceText = "Let's circle back tomorrow so we are on the same page and can remove any blockers."
-
-    static func translate(_ text: String) -> String {
-        let source = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !source.isEmpty else {
-            return "Lass uns morgen darauf zurueckkommen, damit wir alle das gleiche Verstaendnis haben und Hindernisse beseitigen koennen."
-        }
-
-        if source.localizedCaseInsensitiveContains("circle back") {
-            return "Lass uns spaeter darauf zurueckkommen, damit wir alle das gleiche Verstaendnis haben."
-        }
-
-        return "Stub-Uebersetzung: \(source)"
-    }
 }
 
 struct AssistantView: View {
@@ -508,7 +469,7 @@ struct AssistantView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Context")
                     .font(.system(size: 18, weight: .semibold))
-                Text("Discovery prototype - stubbed AI, clipboard fallback")
+                Text("Discovery prototype - local AI, clipboard fallback")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -548,14 +509,8 @@ struct ExplanationView: View {
         HStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    AIControlsView(store: store)
                     ClickableOriginalText(store: store)
-                    section(
-                        "German Translation",
-                        text: store.translatedText,
-                        status: store.translationStatusMessage,
-                        isLoading: store.isGeneratingTranslation
-                    )
+                    TranslationSectionView(store: store)
                 }
                 .padding(18)
             }
@@ -568,63 +523,62 @@ struct ExplanationView: View {
         }
     }
 
-    private func section(_ title: String, text: String, status: String? = nil, isLoading: Bool = false) -> some View {
+}
+
+struct TranslationSectionView: View {
+    @ObservedObject var store: DiscoveryStore
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text(title)
+                Text("German Translation")
                     .font(.headline)
                 Spacer()
-                if isLoading {
-                    ProgressView()
-                        .controlSize(.small)
+                if store.isGeneratingTranslation {
+                    Button {
+                        store.stopTranslation()
+                    } label: {
+                        Image(systemName: "stop.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Stop translation")
+                } else {
+                    Button {
+                        store.regenerateTranslation()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(store.selectedOllamaModel.isEmpty)
+                    .help("Refresh translation")
                 }
             }
-            Text(text)
+
+            Text(translationText)
                 .font(.body)
+                .foregroundStyle(store.translatedText.isEmpty ? Color.secondary.opacity(0.65) : Color.primary)
                 .textSelection(.enabled)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(nsColor: .controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-            if let status {
-                Text(status)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+
+            Text(store.translationStatusMessage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
-}
 
-struct AIControlsView: View {
-    @ObservedObject var store: DiscoveryStore
-
-    var body: some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(store.selectedOllamaModel.isEmpty ? "AI: Stub fallback" : "AI: \(store.selectedOllamaModel)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(store.ollamaStatusMessage)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            Button("Regenerate") {
-                store.regenerateAIResponses()
-            }
-            .disabled(store.selectedOllamaModel.isEmpty || store.isGeneratingTranslation || store.isGeneratingDetail)
-
-            Button("Stop") {
-                store.stopAIResponses()
-            }
-            .disabled(!store.isGeneratingTranslation && !store.isGeneratingDetail)
+    private var translationText: String {
+        if store.isGeneratingTranslation && store.translatedText.isEmpty {
+            return "Loading..."
         }
-        .padding(10)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+        if store.translatedText.isEmpty {
+            return store.translationStatusMessage
+        }
+
+        return store.translatedText
     }
 }
 
@@ -792,43 +746,53 @@ struct PhraseDetailView: View {
 
     var body: some View {
         Group {
-            if let phrase = store.selectedPhrase {
+            if let selectedWordText = store.selectedWordText {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(phrase.phrase)
-                        .font(.system(size: 24, weight: .semibold))
+                    HStack(alignment: .center) {
+                        Text(selectedWordText)
+                            .font(.system(size: 24, weight: .semibold))
 
-                    detail("Meaning", phrase.meaning)
-                    detail("In this context", phrase.contextualMeaning)
-                    detail("Tone", phrase.tone)
-                    detail("Example", phrase.example)
-                    detail("Source", store.detailStatusMessage)
+                        Spacer()
 
-                    Spacer()
-
-                    Button("Save to Learning Bucket") {
-                        store.saveSelectedPhrase()
+                        if store.isGeneratingDetail {
+                            Button {
+                                store.stopDetail()
+                            } label: {
+                                Image(systemName: "stop.fill")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Stop explanation")
+                        } else {
+                            Button {
+                                store.regenerateSelectedDetail()
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(store.selectedOllamaModel.isEmpty)
+                            .help("Refresh explanation")
+                        }
                     }
-                    .buttonStyle(.borderedProminent)
-                }
-            } else if store.isGeneratingDetail {
-                VStack(spacing: 8) {
+
+                    detail("Meaning", store.selectedPhrase?.meaning ?? placeholderText, isPlaceholder: store.selectedPhrase == nil)
+                    detail("In this context", store.selectedPhrase?.contextualMeaning ?? placeholderText, isPlaceholder: store.selectedPhrase == nil)
+                    detail("Tone", store.selectedPhrase?.tone ?? placeholderText, isPlaceholder: store.selectedPhrase == nil)
+                    detail("Example", store.selectedPhrase?.example ?? placeholderText, isPlaceholder: store.selectedPhrase == nil)
+
+                    if !store.detailStatusMessage.isEmpty {
+                        Text(store.detailStatusMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     Spacer()
-                    ProgressView(store.detailStatusMessage)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let selectedWordText = store.selectedWordText {
-                VStack(spacing: 8) {
-                    Spacer()
-                    Text(selectedWordText)
-                        .font(.system(size: 18, weight: .semibold))
-                    Text(store.detailStatusMessage)
-                        .font(.system(size: 12))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.secondary)
-                        .opacity(0.7)
-                        .frame(maxWidth: 260)
-                    Spacer()
+
+                    if store.selectedPhrase != nil {
+                        Button("Save to Learning Bucket") {
+                            store.saveSelectedPhrase()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -851,12 +815,17 @@ struct PhraseDetailView: View {
         .padding(18)
     }
 
-    private func detail(_ title: String, _ value: String) -> some View {
+    private var placeholderText: String {
+        store.isGeneratingDetail ? "Loading..." : store.detailStatusMessage
+    }
+
+    private func detail(_ title: String, _ value: String, isPlaceholder: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(value)
+                .foregroundStyle(isPlaceholder ? Color.secondary.opacity(0.65) : Color.primary)
                 .textSelection(.enabled)
         }
     }
@@ -1017,7 +986,7 @@ final class AssistantPanel: NSPanel {
 
 enum ClipboardReader {
     static func readText() -> String {
-        NSPasteboard.general.string(forType: .string) ?? StubTranslator.defaultSourceText
+        NSPasteboard.general.string(forType: .string) ?? SampleText.defaultSourceText
     }
 }
 
