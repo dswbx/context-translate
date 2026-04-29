@@ -73,3 +73,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Keep model selection in Settings for now. Generate translation and details through separate, cancellable local model requests.
 **Next step:** Test with Ollama running and at least one local model available.
+
+## 2026-04-29 - Added Product Terminology
+
+**Task:** TASK-003
+**Summary:** Added a shared terminology document for core product, AI, privacy, and development language.
+**Files changed:** `docs/TERMINOLOGY.md`, `README.md`, `AGENTS.md`, `tasks/PROGRESS.md`
+**Checks run:** Documentation-only change.
+**Decisions made:** Use "original text", "selected term", "explanation", "learning bucket", "discovery prototype", and related terms consistently.
+**Next step:** Use the terminology doc when naming UI elements, tasks, and future implementation types.

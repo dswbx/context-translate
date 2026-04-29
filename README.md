@@ -24,6 +24,7 @@ The prototype is a learning artifact. It is not the production app foundation by
 - `docs/IDEA.md`: original rough product idea
 - `docs/PRODUCT.md`: cleaned product brief
 - `docs/MVP.md`: MVP scope and guardrails
+- `docs/TERMINOLOGY.md`: shared product language
 - `docs/DISCOVERY.md`: discovery prototype goals and findings
 - `docs/DECISIONS.md`: durable product and technical decisions
 - `docs/QUESTIONS.md`: open product questions

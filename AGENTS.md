@@ -10,9 +10,10 @@ Read these files before making changes:
 
 1. `docs/IDEA.md`
 2. `docs/MVP.md`
-3. `docs/DISCOVERY.md`
-4. `tasks/CURRENT.md`
-5. The relevant task in `tasks/TASKS.md`
+3. `docs/TERMINOLOGY.md`
+4. `docs/DISCOVERY.md`
+5. `tasks/CURRENT.md`
+6. The relevant task in `tasks/TASKS.md`
 
 If a file does not exist yet, create it only when the active task asks for it.
 
