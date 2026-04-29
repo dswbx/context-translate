@@ -103,9 +103,9 @@ Add entries in this format:
 ### 2026-04-29 - Inline Original Text Is Better Than A Separate Word Grid
 
 **Area:** UI
-**Observed:** Product feedback clarified that words should be clickable in the original text itself, not repeated in a separate selection area.
+**Observed:** Product feedback clarified that words should be clickable in the original text itself, not repeated in a separate selection area. The first implementation used an adaptive grid, which broke word layout by forcing words into narrow columns.
 **Why it matters:** Keeping interaction inside the original sentence preserves reading flow and makes the product feel less like a form.
-**Recommendation:** The real MVP should make the original text itself interactive, with word and phrase selection in-place.
+**Recommendation:** The real MVP should make the original text itself interactive, with word and phrase selection in-place. Clickable words must keep intrinsic width and wrap only between words, like CSS `inline-flex`.
 **Carry forward:** Yes.
 
 ### 2026-04-29 - SwiftPM Needs A Small Watch Wrapper

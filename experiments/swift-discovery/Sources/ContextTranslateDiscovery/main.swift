@@ -312,11 +312,7 @@ struct WrappingWords: View {
     let onSelect: (WordToken) -> Void
 
     var body: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 24), spacing: 4, alignment: .leading)],
-            alignment: .leading,
-            spacing: 4
-        ) {
+        WordWrapLayout(horizontalSpacing: 6, verticalSpacing: 6) {
             ForEach(tokens) { token in
                 Button {
                     onSelect(token)
@@ -324,14 +320,100 @@ struct WrappingWords: View {
                     Text(token.text)
                         .font(.body)
                         .foregroundStyle(.primary)
-                        .padding(.horizontal, 2)
+                        .padding(.horizontal, 1)
                         .padding(.vertical, 1)
+                        .fixedSize()
                 }
                 .buttonStyle(.plain)
                 .help("Explain \(token.normalized)")
             }
         }
     }
+}
+
+struct WordWrapLayout: Layout {
+    var horizontalSpacing: CGFloat
+    var verticalSpacing: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        let rows = rows(for: subviews, maxWidth: maxWidth)
+        let width = proposal.width ?? rows.map(\.width).max() ?? 0
+        let height = rows.reduce(CGFloat.zero) { partial, row in
+            partial + row.height
+        } + CGFloat(max(rows.count - 1, 0)) * verticalSpacing
+
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        let rows = rows(for: subviews, maxWidth: bounds.width)
+        var y = bounds.minY
+
+        for row in rows {
+            var x = bounds.minX
+
+            for item in row.items {
+                item.subview.place(
+                    at: CGPoint(x: x, y: y + (row.height - item.size.height) / 2),
+                    proposal: ProposedViewSize(item.size)
+                )
+                x += item.size.width + horizontalSpacing
+            }
+
+            y += row.height + verticalSpacing
+        }
+    }
+
+    private func rows(for subviews: Subviews, maxWidth: CGFloat) -> [WordWrapRow] {
+        var rows: [WordWrapRow] = []
+        var currentItems: [WordWrapItem] = []
+        var currentWidth: CGFloat = 0
+        var currentHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            let spacing = currentItems.isEmpty ? 0 : horizontalSpacing
+            let proposedWidth = currentWidth + spacing + size.width
+
+            if !currentItems.isEmpty && proposedWidth > maxWidth {
+                rows.append(WordWrapRow(items: currentItems, width: currentWidth, height: currentHeight))
+                currentItems = [WordWrapItem(subview: subview, size: size)]
+                currentWidth = size.width
+                currentHeight = size.height
+            } else {
+                currentItems.append(WordWrapItem(subview: subview, size: size))
+                currentWidth = proposedWidth
+                currentHeight = max(currentHeight, size.height)
+            }
+        }
+
+        if !currentItems.isEmpty {
+            rows.append(WordWrapRow(items: currentItems, width: currentWidth, height: currentHeight))
+        }
+
+        return rows
+    }
+}
+
+private struct WordWrapItem {
+    let subview: LayoutSubviews.Element
+    let size: CGSize
+}
+
+private struct WordWrapRow {
+    let items: [WordWrapItem]
+    let width: CGFloat
+    let height: CGFloat
 }
 
 struct PhraseDetailView: View {

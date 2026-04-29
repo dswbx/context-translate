@@ -46,3 +46,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Word selection belongs in the original text surface. SwiftPM needs a helper script for watch-like iteration.
 **Next step:** Test `bash scripts/dev-watch.sh` during prototype iteration if manual restarts become annoying.
+
+## 2026-04-29 - Fixed Inline Word Wrapping
+
+**Task:** TASK-003
+**Summary:** Replaced the adaptive grid word layout with a custom intrinsic wrapping layout so clickable words keep sentence-like flow and wrap between words.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** The original text interaction needs inline-block style behavior, not equal-width adaptive grid cells.
+**Next step:** Relaunch the prototype and verify the original sentence reads naturally while individual words remain clickable.
