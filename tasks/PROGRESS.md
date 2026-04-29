@@ -154,3 +154,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Keep Settings hidden as a mode for now and expose active discovery settings in the mode bar. Use Mine as the user's language and Theirs as the target/source English-language side of the workflow.
 **Next step:** Manually resize the window and verify frame persistence after closing and reopening the app.
+
+## 2026-04-29 - Removed Visible Mode Label
+
+**Task:** TASK-003
+**Summary:** Removed the visible "Mode" label from the segmented mode picker while keeping an accessibility label.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Keep the header bar compact so it responds better to window resizing.
+**Next step:** Manually inspect the mode bar at narrow window sizes.

@@ -836,11 +836,12 @@ struct AssistantView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Picker("Mode", selection: $tab) {
+                Picker("", selection: $tab) {
                     ForEach(PrototypeTab.visibleCases) { tab in
                         Text(tab.title).tag(tab)
                     }
                 }
+                .accessibilityLabel("Mode")
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 260)
 
