@@ -217,3 +217,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Use AppKit for the split interaction because native cursor and resize behavior are part of the expected macOS feel. Keep pane width persistence in the split view delegate.
 **Next step:** Manually verify the cursor changes over the divider and that live dragging no longer distorts pane content.
+
+## 2026-04-29 - Scoped Floating Windows To Active Space
+
+**Task:** TASK-003
+**Summary:** Removed all-Spaces behavior from assistant panels while keeping them floating above other windows.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Use `moveToActiveSpace` and `fullScreenAuxiliary` instead of `canJoinAllSpaces` so menu-bar and shortcut opens appear in the current Space without following the user across Spaces.
+**Next step:** Manually open the assistant from one Desktop, switch to another Desktop, and confirm the window does not follow.

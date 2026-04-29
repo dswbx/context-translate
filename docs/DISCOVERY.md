@@ -185,6 +185,14 @@ Add entries in this format:
 **Recommendation:** Use native vibrancy/translucency only for the bubble window, keep the normal window opaque, and use a native split view for adjustable text and detail panes.
 **Carry forward:** Yes.
 
+### 2026-04-29 - Floating Does Not Mean All Spaces
+
+**Area:** windowing
+**Observed:** Keeping the assistant above other windows is useful, but `canJoinAllSpaces` makes it follow the user across Desktop Spaces.
+**Why it matters:** The normal menu-bar window should feel persistent within the current work context, not globally attached to every Desktop.
+**Recommendation:** Keep the panel floating, but remove `canJoinAllSpaces`. Use `moveToActiveSpace` so opening the assistant from the menu bar or shortcut presents it on the active Space without making it visible everywhere.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

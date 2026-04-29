@@ -1089,6 +1089,10 @@ enum AssistantWindowMode {
             return true
         }
     }
+
+    var collectionBehavior: NSWindow.CollectionBehavior {
+        [.moveToActiveSpace, .fullScreenAuxiliary]
+    }
 }
 
 struct ExplanationView: View {
@@ -2370,7 +2374,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let autosaveName = mode.autosaveName {
             panel.setFrameAutosaveName(autosaveName)
         }
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.collectionBehavior = mode.collectionBehavior
         if mode.hidesTitleBar {
             panel.titleVisibility = .hidden
             panel.titlebarAppearsTransparent = true
