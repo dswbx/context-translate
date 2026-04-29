@@ -226,3 +226,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Use `moveToActiveSpace` and `fullScreenAuxiliary` instead of `canJoinAllSpaces` so menu-bar and shortcut opens appear in the current Space without following the user across Spaces.
 **Next step:** Manually open the assistant from one Desktop, switch to another Desktop, and confirm the window does not follow.
+
+## 2026-04-29 - Adjusted Original Text Surface
+
+**Task:** TASK-003
+**Summary:** Changed the Explain view Original text box from the system gray control background to a 50% transparent black fill.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Apply the translucent dark surface only to the Original text box for now because it sits directly on the bubble material.
+**Next step:** Manually inspect the Original text box over light and dark page backgrounds in bubble mode.

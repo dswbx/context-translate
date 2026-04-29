@@ -1353,7 +1353,7 @@ struct ClickableOriginalText: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .background(Color.black.opacity(0.5))
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
