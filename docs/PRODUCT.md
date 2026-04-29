@@ -45,11 +45,17 @@ The user can save phrases to a learning bucket and revisit them later.
 - Save explained words and phrases.
 - Keep original sentence, selected phrase, explanation, source app setting, lookup date, and learning status.
 
-### Review Mode
+### Learn Mode
 
 - Revisit saved phrases.
 - Show newer or still-learning items more often.
 - Let learned items return after a longer interval.
+
+### Review Mode
+
+- Let the user enter an English sentence they wrote.
+- Optionally capture what they meant in their native language.
+- Rate the sentence, suggest a clearer version when useful, and explain specific improvements.
 
 ### History
 

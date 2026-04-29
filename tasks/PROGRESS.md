@@ -118,3 +118,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** The Composer action remains disabled only for empty input. Once output exists for the unchanged input, the action label becomes "Regenerate" and remains available.
 **Next step:** Manually check the Composer row layout with short and long generated outputs.
+
+## 2026-04-29 - Added Writing Review Mode
+
+**Task:** TASK-003
+**Summary:** Added a visible Review tab for reviewing user-written English, renamed the hidden learning-bucket review surface to Learn, and wired Review to a structured Ollama JSON response.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/TERMINOLOGY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Reserve "Review" for writing feedback. Use "Learn" for the future saved-items practice workflow. Review mode asks for rating, suggested sentence, what works, concrete improvements, and alternatives in one model call.
+**Next step:** Test Review with and without the optional native-language explanation to see whether the prompt produces useful structured feedback.

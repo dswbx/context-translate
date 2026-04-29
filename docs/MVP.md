@@ -2,7 +2,7 @@
 
 ## MVP Goal
 
-A user can select confusing English text in another macOS app, understand the sentence and specific phrases, save useful phrases, review them later, and compose natural English from their native language.
+A user can select confusing English text in another macOS app, understand the sentence and specific phrases, save useful phrases, learn them later, compose natural English from their native language, and review English they wrote.
 
 ## In Scope
 
@@ -14,9 +14,10 @@ A user can select confusing English text in another macOS app, understand the se
 - Translation-first response.
 - Phrase-level explanation after the user chooses confusing phrases.
 - Phrase composer with casual, neutral, and professional outputs.
+- Writing review for user-written English sentences.
 - Local history.
 - Learning bucket.
-- Basic review mode.
+- Basic learn mode.
 - Settings for native language and AI provider.
 - Privacy controls for local storage and source app names.
 
@@ -42,8 +43,9 @@ The MVP is successful when a user can:
 3. Understand the sentence translation.
 4. Ask for phrase-level explanation.
 5. Save a useful phrase.
-6. Review saved phrases.
+6. Learn saved phrases.
 7. Write a thought in their native language and get natural English back.
+8. Review an English sentence they wrote and get structured feedback.
 
 ## Guardrails
 

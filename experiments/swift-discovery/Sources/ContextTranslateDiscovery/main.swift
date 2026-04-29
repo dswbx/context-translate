@@ -13,6 +13,10 @@ final class DiscoveryStore: ObservableObject {
     @Published var composerInput: String
     @Published var composerOutputs: ComposerOutputs
     @Published var composerStatusMessage: String
+    @Published var reviewSentence: String
+    @Published var reviewIntent: String
+    @Published var reviewFeedback: ReviewFeedback?
+    @Published var reviewStatusMessage: String
     @Published var germanTranslation: String
     @Published var translationStatusMessage: String
     @Published var ollamaModels: [String]
@@ -22,6 +26,7 @@ final class DiscoveryStore: ObservableObject {
     @Published var isGeneratingTranslation: Bool
     @Published var isGeneratingDetail: Bool
     @Published var isGeneratingComposer: Bool
+    @Published var isGeneratingReview: Bool
     @Published var detailStatusMessage: String
 
     private let selectedModelKey = "ContextDiscovery.SelectedOllamaModel"
@@ -29,7 +34,9 @@ final class DiscoveryStore: ObservableObject {
     private var translationTask: Task<Void, Never>?
     private var detailTask: Task<Void, Never>?
     private var composerTask: Task<Void, Never>?
+    private var reviewTask: Task<Void, Never>?
     private var lastGeneratedComposerInput: String?
+    private var lastReviewedSentence: String?
 
     init(capturedText: String) {
         self.capturedText = capturedText
@@ -40,6 +47,10 @@ final class DiscoveryStore: ObservableObject {
         self.composerInput = ""
         self.composerOutputs = .empty
         self.composerStatusMessage = "Write a thought, then compose it with a local model."
+        self.reviewSentence = ""
+        self.reviewIntent = ""
+        self.reviewFeedback = nil
+        self.reviewStatusMessage = "Write an English sentence to review."
         self.germanTranslation = ""
         self.translationStatusMessage = "Choose a local Ollama model in Settings to translate."
         self.ollamaModels = []
@@ -49,6 +60,7 @@ final class DiscoveryStore: ObservableObject {
         self.isGeneratingTranslation = false
         self.isGeneratingDetail = false
         self.isGeneratingComposer = false
+        self.isGeneratingReview = false
         self.detailStatusMessage = "Click a word to explain it."
     }
 
@@ -66,6 +78,18 @@ final class DiscoveryStore: ObservableObject {
         }
 
         return "Compose"
+    }
+
+    var reviewSentenceText: String {
+        reviewSentence.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var reviewActionTitle: String {
+        if reviewFeedback != nil && reviewSentenceText == lastReviewedSentence {
+            return "Regenerate"
+        }
+
+        return "Review"
     }
 
     func replaceCapturedText(_ text: String) {
@@ -130,6 +154,26 @@ final class DiscoveryStore: ObservableObject {
         }
 
         generateAIComposerOutput(for: input)
+    }
+
+    func reviewWriting() {
+        stopReview()
+
+        let sentence = reviewSentence.trimmingCharacters(in: .whitespacesAndNewlines)
+        let intent = reviewIntent.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sentence.isEmpty else {
+            reviewFeedback = nil
+            reviewStatusMessage = "Write an English sentence first."
+            return
+        }
+
+        guard !selectedOllamaModel.isEmpty else {
+            reviewFeedback = nil
+            reviewStatusMessage = "Choose a local Ollama model in Settings to review your sentence."
+            return
+        }
+
+        generateAIReview(sentence: sentence, intent: intent)
     }
 
     func selectOllamaModel(_ model: String) {
@@ -208,6 +252,7 @@ final class DiscoveryStore: ObservableObject {
         stopTranslation()
         stopDetail()
         stopComposer()
+        stopReview()
     }
 
     func stopTranslation() {
@@ -234,6 +279,15 @@ final class DiscoveryStore: ObservableObject {
         isGeneratingComposer = false
         if !selectedOllamaModel.isEmpty {
             composerStatusMessage = "Stopped."
+        }
+    }
+
+    func stopReview() {
+        reviewTask?.cancel()
+        reviewTask = nil
+        isGeneratingReview = false
+        if !selectedOllamaModel.isEmpty {
+            reviewStatusMessage = "Stopped."
         }
     }
 
@@ -349,6 +403,63 @@ final class DiscoveryStore: ObservableObject {
         }
     }
 
+    private func generateAIReview(sentence: String, intent: String) {
+        reviewTask?.cancel()
+        reviewFeedback = nil
+        isGeneratingReview = true
+        reviewStatusMessage = "Reviewing with \(selectedOllamaModel)..."
+
+        let intentBlock = intent.isEmpty ? "No native-language explanation was provided." : intent
+        let prompt = """
+        You are helping a German-speaking professional improve an English sentence they wrote.
+        Review the English sentence for naturalness, correctness, tone, and whether it expresses the intended meaning.
+        Keep every field concise and concrete. Do not write one big prose paragraph.
+        Return valid JSON only. No markdown. No code fences.
+
+        Required JSON shape:
+        {
+          "rating": "Good | Understandable | Needs work",
+          "score": "1-5",
+          "correctedSentence": "best improved version of the sentence",
+          "whatWorks": "short note about what is already good",
+          "improvements": [
+            {
+              "issue": "specific issue",
+              "suggestion": "specific improvement",
+              "why": "short explanation"
+            }
+          ],
+          "naturalAlternatives": [
+            "first natural alternative",
+            "second natural alternative"
+          ]
+        }
+
+        English sentence:
+        \(sentence)
+
+        What the user tried to express in German or their native language:
+        \(intentBlock)
+        """
+
+        reviewTask = Task {
+            do {
+                let response = try await askOllama(prompt: prompt)
+                guard !Task.isCancelled else { return }
+                reviewFeedback = ReviewFeedback.fromModelResponse(response)
+                lastReviewedSentence = sentence
+                reviewStatusMessage = "Reviewed with \(selectedOllamaModel)."
+            } catch is CancellationError {
+                reviewStatusMessage = "Review stopped."
+            } catch {
+                reviewFeedback = nil
+                reviewStatusMessage = "Could not reach Ollama. Check that the local server is running."
+            }
+            isGeneratingReview = false
+            reviewTask = nil
+        }
+    }
+
     private func askOllama(prompt: String) async throws -> String {
         guard let url = URL(string: "http://localhost:11434/api/generate") else {
             throw URLError(.badURL)
@@ -431,6 +542,116 @@ struct AIComposerOutput: Decodable {
     let casual: String
     let neutral: String
     let professional: String
+}
+
+struct AIReviewImprovement: Decodable {
+    let issue: String
+    let suggestion: String
+    let why: String
+
+    enum CodingKeys: String, CodingKey {
+        case issue
+        case suggestion
+        case why
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.issue = (try? container.decode(String.self, forKey: .issue)) ?? "Improvement"
+        self.suggestion = (try? container.decode(String.self, forKey: .suggestion)) ?? ""
+        self.why = (try? container.decode(String.self, forKey: .why)) ?? ""
+    }
+}
+
+struct AIReviewFeedback: Decodable {
+    let rating: String
+    let score: String
+    let correctedSentence: String
+    let whatWorks: String
+    let improvements: [AIReviewImprovement]
+    let naturalAlternatives: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case rating
+        case score
+        case correctedSentence
+        case whatWorks
+        case improvements
+        case naturalAlternatives
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.rating = (try? container.decode(String.self, forKey: .rating)) ?? "Understandable"
+
+        if let scoreText = try? container.decode(String.self, forKey: .score) {
+            self.score = scoreText
+        } else if let scoreNumber = try? container.decode(Int.self, forKey: .score) {
+            self.score = String(scoreNumber)
+        } else if let scoreNumber = try? container.decode(Double.self, forKey: .score) {
+            self.score = String(format: "%.1f", scoreNumber)
+        } else {
+            self.score = "?"
+        }
+
+        self.correctedSentence = (try? container.decode(String.self, forKey: .correctedSentence)) ?? ""
+        self.whatWorks = (try? container.decode(String.self, forKey: .whatWorks)) ?? ""
+        self.improvements = (try? container.decode([AIReviewImprovement].self, forKey: .improvements)) ?? []
+        self.naturalAlternatives = (try? container.decode([String].self, forKey: .naturalAlternatives)) ?? []
+    }
+}
+
+struct ReviewImprovement: Identifiable, Equatable {
+    let id = UUID()
+    let issue: String
+    let suggestion: String
+    let why: String
+}
+
+struct ReviewFeedback: Equatable {
+    let rating: String
+    let score: String
+    let correctedSentence: String
+    let whatWorks: String
+    let improvements: [ReviewImprovement]
+    let naturalAlternatives: [String]
+
+    static func fromModelResponse(_ response: String) -> ReviewFeedback {
+        let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
+        let jsonText = trimmed
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let data = jsonText.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(AIReviewFeedback.self, from: data) {
+            return ReviewFeedback(
+                rating: decoded.rating,
+                score: decoded.score,
+                correctedSentence: decoded.correctedSentence,
+                whatWorks: decoded.whatWorks,
+                improvements: decoded.improvements.map {
+                    ReviewImprovement(issue: $0.issue, suggestion: $0.suggestion, why: $0.why)
+                },
+                naturalAlternatives: decoded.naturalAlternatives
+            )
+        }
+
+        return ReviewFeedback(
+            rating: "Needs review",
+            score: "?",
+            correctedSentence: trimmed,
+            whatWorks: "The local model returned an unstructured response.",
+            improvements: [
+                ReviewImprovement(
+                    issue: "Response format",
+                    suggestion: "Try again or use a stronger local model.",
+                    why: "The review mode expects structured JSON so it can show separate sections."
+                )
+            ],
+            naturalAlternatives: []
+        )
+    }
 }
 
 struct PhraseExplanation: Identifiable, Equatable {
@@ -551,7 +772,9 @@ struct AssistantView: View {
             case .composer:
                 ComposerView(store: store)
             case .review:
-                ReviewView(store: store)
+                WritingReviewView(store: store)
+            case .learn:
+                LearnView(store: store)
             case .settings:
                 SettingsView(store: store)
             }
@@ -587,9 +810,10 @@ enum PrototypeTab: String, CaseIterable, Identifiable {
     case explain
     case composer
     case review
+    case learn
     case settings
 
-    static let visibleCases: [PrototypeTab] = [.explain, .composer, .settings]
+    static let visibleCases: [PrototypeTab] = [.explain, .composer, .review, .settings]
 
     var id: String { rawValue }
 
@@ -598,6 +822,7 @@ enum PrototypeTab: String, CaseIterable, Identifiable {
         case .explain: return "Explain"
         case .composer: return "Composer"
         case .review: return "Review"
+        case .learn: return "Learn"
         case .settings: return "Settings"
         }
     }
@@ -1019,6 +1244,186 @@ struct ComposerView: View {
     }
 }
 
+struct WritingReviewView: View {
+    @ObservedObject var store: DiscoveryStore
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Review your English")
+                    .font(.headline)
+
+                input("English sentence", text: $store.reviewSentence, height: 42)
+                input("What you meant (optional)", text: $store.reviewIntent, height: 72)
+
+                HStack {
+                    Text(store.reviewStatusMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if store.isGeneratingReview {
+                        Button("Stop") {
+                            store.stopReview()
+                        }
+                        .buttonStyle(.borderless)
+                    } else {
+                        Button(store.reviewActionTitle) {
+                            store.reviewWriting()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(store.reviewSentenceText.isEmpty)
+                    }
+                }
+
+                if store.reviewFeedback != nil || store.isGeneratingReview {
+                    ReviewFeedbackView(
+                        feedback: store.reviewFeedback,
+                        isLoading: store.isGeneratingReview
+                    )
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(18)
+        }
+    }
+
+    private func input(_ title: String, text: Binding<String>, height: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextEditor(text: text)
+                .font(.body)
+                .frame(height: height)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color(nsColor: .separatorColor))
+                )
+        }
+    }
+}
+
+struct ReviewFeedbackView: View {
+    let feedback: ReviewFeedback?
+    let isLoading: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                reviewBlock("Rating", feedback?.rating ?? placeholder)
+                reviewBlock("Score", feedback?.score ?? placeholder)
+            }
+
+            reviewBlock(
+                "Suggested version",
+                feedback?.correctedSentence ?? placeholder,
+                canCopy: feedback?.correctedSentence.isEmpty == false
+            )
+
+            reviewBlock("What works", feedback?.whatWorks ?? placeholder)
+
+            improvementsSection
+            alternativesSection
+        }
+    }
+
+    private var placeholder: String {
+        isLoading ? "Loading..." : ""
+    }
+
+    private var improvementsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Improvements")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let improvements = feedback?.improvements, !improvements.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(improvements) { improvement in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(improvement.issue)
+                                .font(.body.weight(.semibold))
+                            Text(improvement.suggestion)
+                            Text(improvement.why)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                reviewCard(placeholder)
+            }
+        }
+    }
+
+    private var alternativesSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Alternatives")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let alternatives = feedback?.naturalAlternatives, !alternatives.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(alternatives.enumerated()), id: \.offset) { _, alternative in
+                        HStack(alignment: .top, spacing: 6) {
+                            Text(alternative)
+                                .textSelection(.enabled)
+                            Button {
+                                ClipboardWriter.copy(alternative)
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Copy alternative")
+                        }
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                reviewCard(placeholder)
+            }
+        }
+    }
+
+    private func reviewBlock(_ title: String, _ value: String, canCopy: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            reviewCard(value, canCopy: canCopy)
+        }
+    }
+
+    private func reviewCard(_ value: String, canCopy: Bool = false) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text(value)
+                .foregroundStyle(feedback == nil ? Color.secondary.opacity(0.65) : Color.primary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            if canCopy {
+                Button {
+                    ClipboardWriter.copy(value)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+                .help("Copy suggested version")
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var store: DiscoveryStore
 
@@ -1081,7 +1486,7 @@ struct SettingsView: View {
     }
 }
 
-struct ReviewView: View {
+struct LearnView: View {
     @ObservedObject var store: DiscoveryStore
 
     var body: some View {
@@ -1097,7 +1502,7 @@ struct ReviewView: View {
                         .font(.headline)
                     Text(phrase.contextualMeaning)
                         .foregroundStyle(.secondary)
-                    Text("Review again: soon")
+                    Text("Practice again: soon")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

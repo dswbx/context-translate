@@ -48,11 +48,16 @@ The prototype should answer practical questions that static plans and mockups ca
 - Are casual, neutral, and professional variants enough?
 - Should composer history be mixed with lookup history?
 
-### Learning And Review
+### Learning And Learn Mode
 
 - What is the lightest useful learning bucket?
-- What review interaction feels good enough for MVP?
+- What learn interaction feels good enough for MVP?
 - Which metadata matters?
+
+### Writing Review
+
+- How much native-language intent does the model need to judge whether a user-written English sentence expresses the right idea?
+- Which structured feedback sections are clearest for the user?
 
 ## Findings Log
 

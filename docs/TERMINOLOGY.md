@@ -98,9 +98,17 @@ The saved collection of selected terms the user wants to remember and review lat
 
 Avoid calling this "flashcards" unless the product explicitly becomes card-based.
 
-### Review Mode
+### Learn Mode
 
 The workflow where the user revisits items from the learning bucket.
+
+This was called review mode in earlier discovery notes. Use learn mode going forward so review can mean writing feedback.
+
+### Review Mode
+
+The workflow where a user enters an English sentence they wrote and optionally explains, in their native language, what they tried to express.
+
+Review mode rates the sentence, suggests a better version when useful, and explains concrete improvements in structured sections.
 
 ### History
 

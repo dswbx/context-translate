@@ -1,6 +1,6 @@
 # Contextual Language Assistant
 
-A native macOS language assistant for non-native English speakers. The app helps users understand selected English text in context, inspect confusing phrases, compose natural English from their own language, and review saved phrases over time.
+A native macOS language assistant for non-native English speakers. The app helps users understand selected English text in context, inspect confusing phrases, compose natural English from their own language, review English they wrote, and learn saved phrases over time.
 
 ## Current Phase
 

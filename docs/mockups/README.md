@@ -32,7 +32,8 @@ If mockups are images or interactive files, include a short Markdown companion e
 - Selected text explanation window
 - Phrase selection and detail expansion
 - Phrase composer
-- Learning bucket and review mode
+- Learning bucket and learn mode
+- Writing review mode
 - Privacy and settings
 
 ## Approval Rule
