@@ -235,3 +235,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Apply the translucent dark surface only to the Original text box for now because it sits directly on the bubble material.
 **Next step:** Manually inspect the Original text box over light and dark page backgrounds in bubble mode.
+
+## 2026-04-29 - Unified Translucent Surface Styling
+
+**Task:** TASK-003
+**Summary:** Applied the same 10% transparent black surface to translation, composer, review, and settings boxes and inputs.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Preserve the user-adjusted `0.1` opacity and centralize the color as `PrototypeSurface.background`.
+**Next step:** Manually inspect text legibility for every mode in the translucent bubble.

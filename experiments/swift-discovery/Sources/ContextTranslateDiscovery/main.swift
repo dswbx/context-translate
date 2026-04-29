@@ -996,6 +996,10 @@ struct VisualEffectBackground: NSViewRepresentable {
     }
 }
 
+enum PrototypeSurface {
+    static let background = Color.black.opacity(0.1)
+}
+
 enum AssistantWindowMode {
     case normal
     case bubble
@@ -1306,7 +1310,7 @@ struct TranslationSectionView: View {
                 .textSelection(.enabled)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor))
+                .background(PrototypeSurface.background)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
             VStack(alignment: .leading, spacing: 2) {
@@ -1353,7 +1357,7 @@ struct ClickableOriginalText: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.black.opacity(0.5))
+            .background(PrototypeSurface.background)
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
@@ -1632,6 +1636,8 @@ struct ComposerView: View {
         .padding(.leading, 8)
         .padding(.trailing, 6)
         .frame(height: 34)
+        .background(PrototypeSurface.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color(nsColor: .separatorColor))
@@ -1668,7 +1674,7 @@ struct ComposerView: View {
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .background(PrototypeSurface.background)
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
@@ -1725,7 +1731,10 @@ struct WritingReviewView: View {
                 .foregroundStyle(.secondary)
             TextEditor(text: text)
                 .font(.body)
+                .scrollContentBackground(.hidden)
                 .frame(height: height)
+                .background(PrototypeSurface.background)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(Color(nsColor: .separatorColor))
@@ -1782,7 +1791,7 @@ struct ReviewFeedbackView: View {
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor))
+                .background(PrototypeSurface.background)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             } else {
                 reviewCard(placeholder)
@@ -1814,7 +1823,7 @@ struct ReviewFeedbackView: View {
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor))
+                .background(PrototypeSurface.background)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             } else {
                 reviewCard(placeholder)
@@ -1849,7 +1858,7 @@ struct ReviewFeedbackView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(PrototypeSurface.background)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
@@ -1879,7 +1888,7 @@ struct SettingsView: View {
                 .foregroundStyle(store.ollamaModels.isEmpty ? .secondary : .primary)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor))
+                .background(PrototypeSurface.background)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
             if store.isCheckingOllama {
