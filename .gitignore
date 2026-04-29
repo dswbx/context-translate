@@ -1,0 +1,40 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Local agent and brainstorming state
+.superpowers/
+.codex/
+.agents/tmp/
+
+# Build products
+.build/
+Build/
+DerivedData/
+*.xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# Dependencies
+node_modules/
+vendor/
+
+# Secrets and local config
+.env
+.env.*
+*.local
+*.key
+*.p8
+*.mobileprovision
+
+# Logs and scratch files
+*.log
+tmp/
+scratch/
+coverage/
