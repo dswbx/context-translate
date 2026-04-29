@@ -169,6 +169,14 @@ Add entries in this format:
 **Recommendation:** Keep separate normal and bubble panel modes. Position the bubble from Accessibility selection bounds when available, otherwise near the current mouse location. Treat the shortcut bubble as transient: remove visible title chrome and close it when focus moves outside the bubble.
 **Carry forward:** Yes.
 
+### 2026-04-29 - Hidden Titlebars Still Affect Bubble Layout
+
+**Area:** windowing
+**Observed:** Hiding the shortcut bubble titlebar removed the visible chrome, but SwiftUI still respected the titlebar safe area, leaving a large empty band above the mode switcher.
+**Why it matters:** The bubble should feel compact and contextual. Hidden chrome that still reserves layout space makes it look broken and wastes the limited floating-window area.
+**Recommendation:** When a panel hides its titlebar, explicitly let the SwiftUI root ignore the top container safe area. Persist the bubble size separately from the normal window so users can tune the floating surface without losing contextual placement.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

@@ -879,6 +879,7 @@ struct AssistantView: View {
         }
         .frame(minWidth: mode.minSize.width, minHeight: mode.minSize.height)
         .background(Color(nsColor: .windowBackgroundColor))
+        .bubbleChromeAdjustment(mode)
         .task {
             await store.refreshOllamaModels()
         }
@@ -954,6 +955,17 @@ enum PrototypeTab: String, CaseIterable, Identifiable {
     }
 }
 
+extension View {
+    @ViewBuilder
+    func bubbleChromeAdjustment(_ mode: AssistantWindowMode) -> some View {
+        if mode.hidesTitleBar {
+            self.ignoresSafeArea(.container, edges: .top)
+        } else {
+            self
+        }
+    }
+}
+
 enum AssistantWindowMode {
     case normal
     case bubble
@@ -963,7 +975,7 @@ enum AssistantWindowMode {
         case .normal:
             return NSSize(width: 760, height: 560)
         case .bubble:
-            return NSSize(width: 560, height: 430)
+            return NSSize(width: 680, height: 500)
         }
     }
 
@@ -972,7 +984,7 @@ enum AssistantWindowMode {
         case .normal:
             return NSSize(width: 700, height: 440)
         case .bubble:
-            return NSSize(width: 520, height: 380)
+            return NSSize(width: 560, height: 420)
         }
     }
 
@@ -981,7 +993,7 @@ enum AssistantWindowMode {
         case .normal:
             return NSSize(width: 1200, height: 900)
         case .bubble:
-            return NSSize(width: 760, height: 640)
+            return NSSize(width: 920, height: 760)
         }
     }
 
@@ -1027,6 +1039,15 @@ enum AssistantWindowMode {
             return false
         case .bubble:
             return true
+        }
+    }
+
+    var persistedSizeKey: String? {
+        switch self {
+        case .normal:
+            return nil
+        case .bubble:
+            return "ContextDiscovery.BubblePanel.size"
         }
     }
 }
@@ -2021,6 +2042,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @MainActor
+    func windowDidResize(_ notification: Notification) {
+        guard let resizedPanel = notification.object as? NSPanel,
+              resizedPanel === bubblePanel else {
+            return
+        }
+
+        saveBubbleSize(resizedPanel.frame.size)
+    }
+
+    @MainActor
     private func setupApplicationMenu() {
         let mainMenu = NSMenu()
 
@@ -2159,7 +2190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @MainActor
     private func positionBubblePanel(_ panel: NSPanel) {
-        let size = AssistantWindowMode.bubble.initialSize
+        let size = savedBubbleSize()
         let anchor = SelectionGeometryReader.selectedTextAnchor() ?? NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.visibleFrame.contains(anchor) } ?? NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 900)
@@ -2170,6 +2201,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         )
 
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
+    }
+
+    private func savedBubbleSize() -> NSSize {
+        guard let key = AssistantWindowMode.bubble.persistedSizeKey,
+              let size = UserDefaults.standard.string(forKey: key) else {
+            return AssistantWindowMode.bubble.initialSize
+        }
+
+        let storedSize = NSSizeFromString(size)
+        return constrainedBubbleSize(storedSize)
+    }
+
+    private func saveBubbleSize(_ size: NSSize) {
+        guard let key = AssistantWindowMode.bubble.persistedSizeKey else {
+            return
+        }
+
+        UserDefaults.standard.set(NSStringFromSize(constrainedBubbleSize(size)), forKey: key)
+    }
+
+    private func constrainedBubbleSize(_ size: NSSize) -> NSSize {
+        let mode = AssistantWindowMode.bubble
+        return NSSize(
+            width: min(max(size.width, mode.minSize.width), mode.maxSize.width),
+            height: min(max(size.height, mode.minSize.height), mode.maxSize.height)
+        )
     }
 
     @MainActor

@@ -181,3 +181,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Keep the normal menu-bar window persistent and titled. Apply transient behavior only to the shortcut bubble.
 **Next step:** Manually verify that clicking inside the bubble keeps it open, clicking outside closes it, and the menu-bar window remains persistent.
+
+## 2026-04-29 - Tightened Bubble Chrome And Persisted Size
+
+**Task:** TASK-003
+**Summary:** Removed the hidden-titlebar top safe-area gap from the shortcut bubble, increased its default size, expanded resize limits, and persisted the user's bubble size.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Recalculate bubble position on each shortcut open, but preserve the user's chosen bubble width and height.
+**Next step:** Manually resize the bubble, close it by clicking outside, reopen with Cmd+Option+E, and confirm the size is retained near the new selection.
