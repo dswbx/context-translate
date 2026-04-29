@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Carbon
 import Foundation
 import SwiftUI
@@ -6,6 +7,7 @@ import SwiftUI
 @MainActor
 final class DiscoveryStore: ObservableObject {
     @Published var capturedText: String
+    @Published var captureStatusMessage: String
     @Published var selectedPhrase: PhraseExplanation?
     @Published var selectedTokenID: Int?
     @Published var selectedWordText: String?
@@ -38,8 +40,9 @@ final class DiscoveryStore: ObservableObject {
     private var lastGeneratedComposerInput: String?
     private var lastReviewedSentence: String?
 
-    init(capturedText: String) {
-        self.capturedText = capturedText
+    init(capture: TextCaptureResult) {
+        self.capturedText = capture.text
+        self.captureStatusMessage = capture.statusMessage
         self.selectedPhrase = nil
         self.selectedTokenID = nil
         self.selectedWordText = nil
@@ -92,9 +95,10 @@ final class DiscoveryStore: ObservableObject {
         return "Review"
     }
 
-    func replaceCapturedText(_ text: String) {
+    func replaceCapturedText(_ capture: TextCaptureResult) {
         stopAIResponses()
-        capturedText = text.isEmpty ? SampleText.defaultSourceText : text
+        capturedText = capture.text.isEmpty ? SampleText.defaultSourceText : capture.text
+        captureStatusMessage = capture.statusMessage
         selectedPhrase = nil
         selectedTokenID = nil
         selectedWordText = nil
@@ -791,15 +795,15 @@ struct AssistantView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Context")
                     .font(.system(size: 18, weight: .semibold))
-                Text("Discovery prototype - local AI, clipboard fallback")
+                Text(store.captureStatusMessage)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            Button("Refresh Clipboard") {
-                store.replaceCapturedText(ClipboardReader.readText())
+            Button("Recapture") {
+                store.replaceCapturedText(TextCaptureService.captureText())
             }
         }
         .padding(16)
@@ -1532,16 +1536,156 @@ final class AssistantPanel: NSPanel {
     }
 }
 
-enum ClipboardReader {
-    static func readText() -> String {
-        NSPasteboard.general.string(forType: .string) ?? SampleText.defaultSourceText
-    }
-}
-
 enum ClipboardWriter {
     static func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+}
+
+enum TextCaptureSource {
+    case accessibility
+    case temporaryCopyRestore
+    case clipboard
+    case sample
+
+    var statusMessage: String {
+        switch self {
+        case .accessibility:
+            return "Captured from selection via Accessibility."
+        case .temporaryCopyRestore:
+            return "Captured from selection via temporary copy-restore."
+        case .clipboard:
+            return "Captured from clipboard fallback."
+        case .sample:
+            return "Showing sample text."
+        }
+    }
+}
+
+struct TextCaptureResult {
+    let text: String
+    let source: TextCaptureSource
+
+    var statusMessage: String {
+        source.statusMessage
+    }
+}
+
+enum TextCaptureService {
+    static func captureText() -> TextCaptureResult {
+        if let text = accessibilitySelectedText() {
+            return TextCaptureResult(text: text, source: .accessibility)
+        }
+
+        if let text = temporaryCopyRestoreSelectedText() {
+            return TextCaptureResult(text: text, source: .temporaryCopyRestore)
+        }
+
+        if let text = clipboardText() {
+            return TextCaptureResult(text: text, source: .clipboard)
+        }
+
+        return TextCaptureResult(text: SampleText.defaultSourceText, source: .sample)
+    }
+
+    private static func accessibilitySelectedText() -> String? {
+        guard AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.frontmostApplication else {
+            return nil
+        }
+
+        let appElement = AXUIElementCreateApplication(app.processIdentifier)
+        var focusedValue: CFTypeRef?
+        let focusedStatus = AXUIElementCopyAttributeValue(
+            appElement,
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedValue
+        )
+
+        guard focusedStatus == .success,
+              let focusedElement = focusedValue,
+              CFGetTypeID(focusedElement) == AXUIElementGetTypeID() else {
+            return nil
+        }
+
+        var selectedValue: CFTypeRef?
+        let selectedStatus = AXUIElementCopyAttributeValue(
+            (focusedElement as! AXUIElement),
+            kAXSelectedTextAttribute as CFString,
+            &selectedValue
+        )
+
+        guard selectedStatus == .success,
+              let selectedText = selectedValue as? String else {
+            return nil
+        }
+
+        return nonEmpty(selectedText)
+    }
+
+    private static func temporaryCopyRestoreSelectedText() -> String? {
+        let pasteboard = NSPasteboard.general
+        let previousItems = clonePasteboardItems(pasteboard.pasteboardItems ?? [])
+        let previousChangeCount = pasteboard.changeCount
+
+        sendCopyShortcut()
+
+        let deadline = Date().addingTimeInterval(0.35)
+        while Date() < deadline && pasteboard.changeCount == previousChangeCount {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.03))
+        }
+
+        let didCopySelection = pasteboard.changeCount != previousChangeCount
+        let copiedText = didCopySelection ? nonEmpty(pasteboard.string(forType: .string)) : nil
+
+        pasteboard.clearContents()
+        if !previousItems.isEmpty {
+            pasteboard.writeObjects(previousItems)
+        }
+
+        return copiedText
+    }
+
+    private static func clipboardText() -> String? {
+        nonEmpty(NSPasteboard.general.string(forType: .string))
+    }
+
+    private static func nonEmpty(_ text: String?) -> String? {
+        guard let text else {
+            return nil
+        }
+
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : text
+    }
+
+    private static func sendCopyShortcut() {
+        guard let source = CGEventSource(stateID: .combinedSessionState) else {
+            return
+        }
+
+        let keyCode = CGKeyCode(kVK_ANSI_C)
+        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
+        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
+        keyDown?.flags = .maskCommand
+        keyUp?.flags = .maskCommand
+        keyDown?.post(tap: .cghidEventTap)
+        keyUp?.post(tap: .cghidEventTap)
+    }
+
+    private static func clonePasteboardItems(_ items: [NSPasteboardItem]) -> [NSPasteboardItem] {
+        items.map { item in
+            let clone = NSPasteboardItem()
+            for type in item.types {
+                if let data = item.data(forType: type) {
+                    clone.setData(data, forType: type)
+                } else if let string = item.string(forType: type) {
+                    clone.setString(string, forType: type)
+                }
+            }
+            return clone
+        }
     }
 }
 
@@ -1554,12 +1698,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
-        store = DiscoveryStore(capturedText: ClipboardReader.readText())
+        store = DiscoveryStore(capture: TextCaptureService.captureText())
         setupApplicationMenu()
         NSApp.setActivationPolicy(.accessory)
         setupMenuBar()
         registerHotKey()
-        showAssistant()
+        showAssistant(recapture: false)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -1604,7 +1748,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Open Assistant", action: #selector(openAssistant), keyEquivalent: "e"))
-        menu.addItem(NSMenuItem(title: "Refresh From Clipboard", action: #selector(refreshFromClipboard), keyEquivalent: "r"))
+        menu.addItem(NSMenuItem(title: "Recapture Text", action: #selector(recaptureText), keyEquivalent: "r"))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
         item.menu = menu
@@ -1618,8 +1762,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @MainActor
-    @objc private func refreshFromClipboard() {
-        store.replaceCapturedText(ClipboardReader.readText())
+    @objc private func recaptureText() {
         showAssistant()
     }
 
@@ -1628,8 +1771,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @MainActor
-    private func showAssistant() {
-        store.replaceCapturedText(ClipboardReader.readText())
+    private func showAssistant(recapture: Bool = true) {
+        if recapture {
+            store.replaceCapturedText(TextCaptureService.captureText())
+        }
 
         if panel == nil {
             let panel = AssistantPanel(

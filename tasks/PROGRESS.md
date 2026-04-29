@@ -127,3 +127,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Reserve "Review" for writing feedback. Use "Learn" for the future saved-items practice workflow. Review mode asks for rating, suggested sentence, what works, concrete improvements, and alternatives in one model call.
 **Next step:** Test Review with and without the optional native-language explanation to see whether the prompt produces useful structured feedback.
+
+## 2026-04-29 - Added Capture Method Signaling
+
+**Task:** TASK-003
+**Summary:** Replaced direct clipboard-only capture with a hybrid capture flow and showed the capture method in the assistant header.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/TERMINOLOGY.md`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Try Accessibility selected text first, temporary copy-restore second, clipboard fallback third, and sample text only when no text is available.
+**Next step:** Manually test capture from several apps and note which ones support Accessibility selection versus copy-restore.

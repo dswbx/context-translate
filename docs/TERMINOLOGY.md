@@ -148,6 +148,12 @@ The discovery-phase fallback where the app reads the macOS clipboard instead of 
 
 The original text exactly as captured or pasted. Raw text can be privacy-sensitive.
 
+### Capture Method
+
+How the assistant obtained the original text. Discovery methods are Accessibility selection, temporary copy-restore, clipboard fallback, and sample text.
+
+The prototype should signal the active capture method so the user knows whether text came from a direct selection path or a fallback.
+
 ## Development Terms
 
 ### Discovery Prototype

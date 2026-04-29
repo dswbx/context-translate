@@ -153,6 +153,14 @@ Add entries in this format:
 **Recommendation:** Keep generation tasks cancellable and expose explicit Regenerate and Stop actions near the generated content.
 **Carry forward:** Yes.
 
+### 2026-04-29 - Capture Method Should Be Visible
+
+**Area:** text capture
+**Observed:** macOS text capture needs multiple strategies. Accessibility selection is the cleanest path when available, temporary copy-restore works across more apps, and clipboard remains the fallback.
+**Why it matters:** Users may otherwise be confused about why the assistant used stale clipboard text or why a selection failed.
+**Recommendation:** Keep signaling the capture method in the assistant header during discovery and preserve this as a production UX requirement.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:
