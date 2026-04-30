@@ -280,3 +280,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Use a non-secret UserDefaults flag to show whether an OpenRouter key is expected, and only touch Keychain when saving, forgetting, testing, or making OpenRouter requests.
 **Next step:** Manually verify the prompt appears only when OpenRouter actually needs the key, not every app launch.
+
+## 2026-04-30 - Removed Duplicate Provider Picker Label
+
+**Task:** TASK-003
+**Summary:** Removed the visible "AI Provider" label from the provider segmented picker because the section title already provides that context.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Keep an accessibility label on the picker while avoiding duplicate visible text.
+**Next step:** Manually inspect Settings for cleaner spacing around the provider picker.

@@ -2196,7 +2196,7 @@ struct SettingsView: View {
     private var aiProviderSection: some View {
         settingsSection("AI Provider") {
             Picker(
-                "AI Provider",
+                "",
                 selection: Binding(
                     get: { store.selectedProvider },
                     set: { store.selectProvider($0) }
@@ -2206,6 +2206,7 @@ struct SettingsView: View {
                     Text(provider.name).tag(provider)
                 }
             }
+            .accessibilityLabel("AI Provider")
             .pickerStyle(.segmented)
 
             Text(providerPrivacyMessage)
