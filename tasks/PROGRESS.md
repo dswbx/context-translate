@@ -271,3 +271,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Keep Languages separate, and group provider selection with the active provider's concrete configuration.
 **Next step:** Manually switch providers in Settings and confirm only the relevant controls are shown.
+
+## 2026-04-30 - Reduced Keychain Prompt Frequency
+
+**Task:** TASK-003
+**Summary:** Stopped reading the OpenRouter API key from Keychain on app startup and cached the key in memory after the first successful read or save.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Use a non-secret UserDefaults flag to show whether an OpenRouter key is expected, and only touch Keychain when saving, forgetting, testing, or making OpenRouter requests.
+**Next step:** Manually verify the prompt appears only when OpenRouter actually needs the key, not every app launch.

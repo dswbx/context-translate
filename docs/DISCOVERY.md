@@ -209,6 +209,14 @@ Add entries in this format:
 **Recommendation:** Keep Ollama as the default privacy-first provider, add OpenRouter as an optional cloud provider, store cloud API keys in Keychain, and preserve the provider abstraction so OpenAI API can be added later.
 **Carry forward:** Yes.
 
+### 2026-04-30 - Keychain Prompts Need Stable App Identity
+
+**Area:** credentials
+**Observed:** A SwiftPM debug executable launched with `swift run` can repeatedly trigger Keychain permission prompts even after choosing "Always Allow", especially after rebuilds.
+**Why it matters:** Keychain trust is tied to app/code identity. The real app needs a stable signed bundle identity, while the discovery prototype should avoid unnecessary Keychain reads.
+**Recommendation:** Do not read Keychain on startup just to populate UI. Cache credentials in memory after first successful read/save during a run. For the real app, use a signed `.app` bundle with a stable bundle identifier.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

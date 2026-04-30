@@ -48,6 +48,7 @@ final class DiscoveryStore: ObservableObject {
     private let theirLanguageKey = "ContextDiscovery.TheirLanguage"
     private let openRouterKeychainService = "ContextTranslateDiscovery.OpenRouter"
     private let openRouterKeychainAccount = "apiKey"
+    private let openRouterHasAPIKeyKey = "ContextDiscovery.OpenRouter.HasAPIKey"
     private var selectedToken: WordToken?
     private var translationTask: Task<Void, Never>?
     private var detailTask: Task<Void, Never>?
@@ -55,15 +56,13 @@ final class DiscoveryStore: ObservableObject {
     private var reviewTask: Task<Void, Never>?
     private var lastGeneratedComposerInput: String?
     private var lastReviewedSentence: String?
+    private var cachedOpenRouterAPIKey: String?
 
     init(capture: TextCaptureResult) {
         let savedMyLanguage = LanguageOption.savedValue(forKey: myLanguageKey, fallback: .german)
         let savedTheirLanguage = LanguageOption.savedValue(forKey: theirLanguageKey, fallback: .english)
         let savedProvider = AIProvider.savedValue(forKey: selectedProviderKey, fallback: .ollama)
-        let hasOpenRouterKey = KeychainPasswordStore.read(
-            service: openRouterKeychainService,
-            account: openRouterKeychainAccount
-        ) != nil
+        let hasOpenRouterKey = UserDefaults.standard.bool(forKey: openRouterHasAPIKeyKey)
 
         self.capturedText = capture.text
         self.captureStatusMessage = capture.statusMessage
@@ -272,17 +271,15 @@ final class DiscoveryStore: ObservableObject {
                 account: openRouterKeychainAccount
             )
             openRouterAPIKeyInput = ""
+            cachedOpenRouterAPIKey = apiKey
             hasOpenRouterAPIKey = true
+            UserDefaults.standard.set(true, forKey: openRouterHasAPIKeyKey)
             openRouterStatusMessage = "OpenRouter API key saved in Keychain."
             if selectedProvider == .openRouter {
                 translationStatusMessage = providerReadyMessage(for: .openRouter)
                 regenerateAIResponses()
             }
         } catch {
-            hasOpenRouterAPIKey = KeychainPasswordStore.read(
-                service: openRouterKeychainService,
-                account: openRouterKeychainAccount
-            ) != nil
             openRouterStatusMessage = "Could not save OpenRouter API key."
         }
     }
@@ -293,7 +290,9 @@ final class DiscoveryStore: ObservableObject {
             account: openRouterKeychainAccount
         )
         openRouterAPIKeyInput = ""
+        cachedOpenRouterAPIKey = nil
         hasOpenRouterAPIKey = false
+        UserDefaults.standard.set(false, forKey: openRouterHasAPIKeyKey)
         openRouterStatusMessage = "OpenRouter API key removed."
         if selectedProvider == .openRouter {
             stopAIResponses()
@@ -715,10 +714,7 @@ final class DiscoveryStore: ObservableObject {
         guard let url = URL(string: "https://openrouter.ai/api/v1/chat/completions") else {
             throw URLError(.badURL)
         }
-        guard let apiKey = KeychainPasswordStore.read(
-            service: openRouterKeychainService,
-            account: openRouterKeychainAccount
-        ), !apiKey.isEmpty else {
+        guard let apiKey = openRouterAPIKey() else {
             throw URLError(.userAuthenticationRequired)
         }
 
@@ -753,6 +749,27 @@ final class DiscoveryStore: ObservableObject {
         }
 
         return content
+    }
+
+    private func openRouterAPIKey() -> String? {
+        if let cachedOpenRouterAPIKey {
+            return cachedOpenRouterAPIKey
+        }
+
+        guard let apiKey = KeychainPasswordStore.read(
+            service: openRouterKeychainService,
+            account: openRouterKeychainAccount
+        ), !apiKey.isEmpty else {
+            hasOpenRouterAPIKey = false
+            UserDefaults.standard.set(false, forKey: openRouterHasAPIKeyKey)
+            openRouterStatusMessage = "OpenRouter API key was not found in Keychain."
+            return nil
+        }
+
+        cachedOpenRouterAPIKey = apiKey
+        hasOpenRouterAPIKey = true
+        UserDefaults.standard.set(true, forKey: openRouterHasAPIKeyKey)
+        return apiKey
     }
 }
 
