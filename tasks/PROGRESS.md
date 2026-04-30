@@ -262,3 +262,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Keep prompts and parsing shared across providers. Use non-streaming OpenRouter chat completions for the first integration. Store only non-secret provider/model preferences in UserDefaults.
 **Next step:** Manually test OpenRouter with a real API key and model ID, then check Ollama regression paths.
+
+## 2026-04-30 - Simplified Provider Settings
+
+**Task:** TASK-003
+**Summary:** Moved the AI provider selector into the AI Provider section and made the provider options dynamic so only Ollama or OpenRouter settings are visible at a time.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Keep Languages separate, and group provider selection with the active provider's concrete configuration.
+**Next step:** Manually switch providers in Settings and confirm only the relevant controls are shown.

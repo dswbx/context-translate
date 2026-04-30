@@ -2141,25 +2141,6 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                settingsSection("Provider") {
-                    Picker(
-                        "AI Provider",
-                        selection: Binding(
-                            get: { store.selectedProvider },
-                            set: { store.selectProvider($0) }
-                        )
-                    ) {
-                        ForEach(AIProvider.allCases) { provider in
-                            Text(provider.name).tag(provider)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Text(providerPrivacyMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
                 settingsSection("Languages") {
                     Picker(
                         "Mine",
@@ -2188,124 +2169,158 @@ struct SettingsView: View {
                     .pickerStyle(.menu)
                 }
 
-                settingsSection("Local AI") {
-                    HStack {
-                        Text("Ollama keeps prototype AI calls local for privacy.")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Refresh Models") {
-                            Task {
-                                await store.refreshOllamaModels()
-                            }
-                        }
-                    }
-
-                    Text(store.ollamaStatusMessage)
-                        .font(.callout)
-                        .foregroundStyle(store.ollamaModels.isEmpty ? .secondary : .primary)
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(PrototypeSurface.background)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                    if store.isCheckingOllama {
-                        ProgressView("Checking Ollama...")
-                    } else if !store.ollamaModels.isEmpty {
-                        Picker(
-                            "Model",
-                            selection: Binding(
-                                get: { store.selectedOllamaModel },
-                                set: { store.selectOllamaModel($0) }
-                            )
-                        ) {
-                            ForEach(store.ollamaModels, id: \.self) { model in
-                                Text(model).tag(model)
-                            }
-                        }
-                        .pickerStyle(.menu)
-
-                        Text("Selected model is persisted with UserDefaults for this prototype.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Start Ollama, then refresh models.")
-                            Text("Example: `ollama run llama3.2`")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                settingsSection("OpenRouter") {
-                    Text("OpenRouter sends selected text to OpenRouter and the upstream model provider you choose.")
-                        .foregroundStyle(.secondary)
-
-                    SecureField("OpenRouter API key", text: $store.openRouterAPIKeyInput)
-                        .textFieldStyle(.roundedBorder)
-
-                    HStack {
-                        Button("Save Key") {
-                            store.saveOpenRouterAPIKey()
-                        }
-                        .disabled(store.openRouterAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                        Button("Forget Key") {
-                            store.forgetOpenRouterAPIKey()
-                        }
-                        .disabled(!store.hasOpenRouterAPIKey)
-
-                        Spacer()
-
-                        Text(store.hasOpenRouterAPIKey ? "Key stored in Keychain" : "No key stored")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        TextField(
-                            "Model ID",
-                            text: Binding(
-                                get: { store.selectedOpenRouterModel },
-                                set: { store.selectOpenRouterModel($0) }
-                            )
-                        )
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit {
-                            store.applyOpenRouterModelSelection()
-                        }
-
-                        Button("Use Model") {
-                            store.applyOpenRouterModelSelection()
-                        }
-                        .disabled(store.selectedOpenRouterModelText.isEmpty)
-                    }
-
-                    HStack {
-                        Text(store.openRouterStatusMessage)
-                            .font(.callout)
-                            .foregroundStyle(store.hasOpenRouterAPIKey ? .primary : .secondary)
-                        Spacer()
-                        if store.isTestingOpenRouter {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Button("Test Connection") {
-                                Task {
-                                    await store.testOpenRouterConnection()
-                                }
-                            }
-                            .disabled(!store.hasOpenRouterAPIKey || store.selectedOpenRouterModelText.isEmpty)
-                        }
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(PrototypeSurface.background)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
+                aiProviderSection
             }
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var aiProviderSection: some View {
+        settingsSection("AI Provider") {
+            Picker(
+                "AI Provider",
+                selection: Binding(
+                    get: { store.selectedProvider },
+                    set: { store.selectProvider($0) }
+                )
+            ) {
+                ForEach(AIProvider.allCases) { provider in
+                    Text(provider.name).tag(provider)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text(providerPrivacyMessage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            switch store.selectedProvider {
+            case .ollama:
+                ollamaSettings
+            case .openRouter:
+                openRouterSettings
+            }
+        }
+    }
+
+    private var ollamaSettings: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Ollama keeps prototype AI calls local for privacy.")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Refresh Models") {
+                    Task {
+                        await store.refreshOllamaModels()
+                    }
+                }
+            }
+
+            Text(store.ollamaStatusMessage)
+                .font(.callout)
+                .foregroundStyle(store.ollamaModels.isEmpty ? .secondary : .primary)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(PrototypeSurface.background)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            if store.isCheckingOllama {
+                ProgressView("Checking Ollama...")
+            } else if !store.ollamaModels.isEmpty {
+                Picker(
+                    "Model",
+                    selection: Binding(
+                        get: { store.selectedOllamaModel },
+                        set: { store.selectOllamaModel($0) }
+                    )
+                ) {
+                    ForEach(store.ollamaModels, id: \.self) { model in
+                        Text(model).tag(model)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Text("Selected model is persisted with UserDefaults for this prototype.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Start Ollama, then refresh models.")
+                    Text("Example: `ollama run llama3.2`")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var openRouterSettings: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("OpenRouter sends selected text to OpenRouter and the upstream model provider you choose.")
+                .foregroundStyle(.secondary)
+
+            SecureField("OpenRouter API key", text: $store.openRouterAPIKeyInput)
+                .textFieldStyle(.roundedBorder)
+
+            HStack {
+                Button("Save Key") {
+                    store.saveOpenRouterAPIKey()
+                }
+                .disabled(store.openRouterAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Button("Forget Key") {
+                    store.forgetOpenRouterAPIKey()
+                }
+                .disabled(!store.hasOpenRouterAPIKey)
+
+                Spacer()
+
+                Text(store.hasOpenRouterAPIKey ? "Key stored in Keychain" : "No key stored")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                TextField(
+                    "Model ID",
+                    text: Binding(
+                        get: { store.selectedOpenRouterModel },
+                        set: { store.selectOpenRouterModel($0) }
+                    )
+                )
+                .textFieldStyle(.roundedBorder)
+                .onSubmit {
+                    store.applyOpenRouterModelSelection()
+                }
+
+                Button("Use Model") {
+                    store.applyOpenRouterModelSelection()
+                }
+                .disabled(store.selectedOpenRouterModelText.isEmpty)
+            }
+
+            HStack {
+                Text(store.openRouterStatusMessage)
+                    .font(.callout)
+                    .foregroundStyle(store.hasOpenRouterAPIKey ? .primary : .secondary)
+                Spacer()
+                if store.isTestingOpenRouter {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Button("Test Connection") {
+                        Task {
+                            await store.testOpenRouterConnection()
+                        }
+                    }
+                    .disabled(!store.hasOpenRouterAPIKey || store.selectedOpenRouterModelText.isEmpty)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PrototypeSurface.background)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 
