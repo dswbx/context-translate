@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import Carbon
 import Foundation
+import Security
 import SwiftUI
 
 @MainActor
@@ -21,12 +22,18 @@ final class DiscoveryStore: ObservableObject {
     @Published var reviewStatusMessage: String
     @Published var germanTranslation: String
     @Published var translationStatusMessage: String
+    @Published var selectedProvider: AIProvider
     @Published var ollamaModels: [String]
     @Published var selectedOllamaModel: String
+    @Published var selectedOpenRouterModel: String
+    @Published var openRouterAPIKeyInput: String
     @Published var myLanguage: LanguageOption
     @Published var theirLanguage: LanguageOption
     @Published var ollamaStatusMessage: String
+    @Published var openRouterStatusMessage: String
+    @Published var hasOpenRouterAPIKey: Bool
     @Published var isCheckingOllama: Bool
+    @Published var isTestingOpenRouter: Bool
     @Published var isGeneratingTranslation: Bool
     @Published var isGeneratingDetail: Bool
     @Published var isGeneratingComposer: Bool
@@ -35,8 +42,12 @@ final class DiscoveryStore: ObservableObject {
     @Published var selectedTab: PrototypeTab
 
     private let selectedModelKey = "ContextDiscovery.SelectedOllamaModel"
+    private let selectedProviderKey = "ContextDiscovery.SelectedProvider"
+    private let selectedOpenRouterModelKey = "ContextDiscovery.SelectedOpenRouterModel"
     private let myLanguageKey = "ContextDiscovery.MyLanguage"
     private let theirLanguageKey = "ContextDiscovery.TheirLanguage"
+    private let openRouterKeychainService = "ContextTranslateDiscovery.OpenRouter"
+    private let openRouterKeychainAccount = "apiKey"
     private var selectedToken: WordToken?
     private var translationTask: Task<Void, Never>?
     private var detailTask: Task<Void, Never>?
@@ -48,6 +59,11 @@ final class DiscoveryStore: ObservableObject {
     init(capture: TextCaptureResult) {
         let savedMyLanguage = LanguageOption.savedValue(forKey: myLanguageKey, fallback: .german)
         let savedTheirLanguage = LanguageOption.savedValue(forKey: theirLanguageKey, fallback: .english)
+        let savedProvider = AIProvider.savedValue(forKey: selectedProviderKey, fallback: .ollama)
+        let hasOpenRouterKey = KeychainPasswordStore.read(
+            service: openRouterKeychainService,
+            account: openRouterKeychainAccount
+        ) != nil
 
         self.capturedText = capture.text
         self.captureStatusMessage = capture.statusMessage
@@ -66,16 +82,23 @@ final class DiscoveryStore: ObservableObject {
         self.reviewStatusMessage = "Write a \(savedTheirLanguage.name) sentence to review."
         self.germanTranslation = ""
         self.translationStatusMessage = "Choose a local Ollama model to translate."
+        self.selectedProvider = savedProvider
         self.ollamaModels = []
         self.selectedOllamaModel = UserDefaults.standard.string(forKey: selectedModelKey) ?? ""
+        self.selectedOpenRouterModel = UserDefaults.standard.string(forKey: selectedOpenRouterModelKey) ?? "openrouter/auto"
+        self.openRouterAPIKeyInput = ""
         self.ollamaStatusMessage = "Ollama has not been checked yet."
+        self.openRouterStatusMessage = hasOpenRouterKey ? "OpenRouter API key is stored in Keychain." : "Add an OpenRouter API key to use cloud models."
+        self.hasOpenRouterAPIKey = hasOpenRouterKey
         self.isCheckingOllama = false
+        self.isTestingOpenRouter = false
         self.isGeneratingTranslation = false
         self.isGeneratingDetail = false
         self.isGeneratingComposer = false
         self.isGeneratingReview = false
         self.detailStatusMessage = "Click a word to explain it."
         self.selectedTab = .explain
+        self.translationStatusMessage = providerReadyMessage(for: savedProvider)
     }
 
     var translatedText: String {
@@ -106,6 +129,14 @@ final class DiscoveryStore: ObservableObject {
         return "Review"
     }
 
+    var isActiveProviderConfigured: Bool {
+        isProviderConfigured(selectedProvider)
+    }
+
+    var selectedOpenRouterModelText: String {
+        selectedOpenRouterModel.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     func replaceCapturedText(_ capture: TextCaptureResult) {
         stopAIResponses()
         capturedText = capture.text.isEmpty ? SampleText.defaultSourceText : capture.text
@@ -115,9 +146,9 @@ final class DiscoveryStore: ObservableObject {
         selectedWordText = nil
         selectedToken = nil
         germanTranslation = ""
-        translationStatusMessage = selectedOllamaModel.isEmpty ? "Choose a local Ollama model to translate." : "Ready to translate with \(selectedOllamaModel)."
+        translationStatusMessage = providerReadyMessage(for: selectedProvider)
         detailStatusMessage = "Click a word to explain it."
-        if !selectedOllamaModel.isEmpty {
+        if isActiveProviderConfigured {
             regenerateAIResponses()
         }
     }
@@ -133,9 +164,9 @@ final class DiscoveryStore: ObservableObject {
         selectedWordText = token.text
         selectedToken = token
 
-        if selectedOllamaModel.isEmpty {
+        if !isActiveProviderConfigured {
             selectedPhrase = nil
-            detailStatusMessage = "Choose a local Ollama model to explain this word."
+            detailStatusMessage = providerMissingConfigurationMessage(for: selectedProvider, action: "explain this word")
         } else {
             selectedPhrase = nil
             generateAIDetail(for: token)
@@ -162,9 +193,9 @@ final class DiscoveryStore: ObservableObject {
             return
         }
 
-        guard !selectedOllamaModel.isEmpty else {
+        guard isActiveProviderConfigured else {
             composerOutputs = .empty
-            composerStatusMessage = "Choose a local Ollama model to compose."
+            composerStatusMessage = providerMissingConfigurationMessage(for: selectedProvider, action: "compose")
             return
         }
 
@@ -182,9 +213,9 @@ final class DiscoveryStore: ObservableObject {
             return
         }
 
-        guard !selectedOllamaModel.isEmpty else {
+        guard isActiveProviderConfigured else {
             reviewFeedback = nil
-            reviewStatusMessage = "Choose a local Ollama model to review your sentence."
+            reviewStatusMessage = providerMissingConfigurationMessage(for: selectedProvider, action: "review your sentence")
             return
         }
 
@@ -195,14 +226,110 @@ final class DiscoveryStore: ObservableObject {
         selectedOllamaModel = model
         UserDefaults.standard.set(model, forKey: selectedModelKey)
         translationStatusMessage = "Selected \(model)."
-        regenerateAIResponses()
+        if selectedProvider == .ollama {
+            regenerateAIResponses()
+        }
+    }
+
+    func selectProvider(_ provider: AIProvider) {
+        selectedProvider = provider
+        UserDefaults.standard.set(provider.rawValue, forKey: selectedProviderKey)
+        translationStatusMessage = providerReadyMessage(for: provider)
+        if isProviderConfigured(provider) {
+            regenerateAIResponses()
+        } else {
+            stopAIResponses()
+        }
+    }
+
+    func selectOpenRouterModel(_ model: String) {
+        selectedOpenRouterModel = model
+        UserDefaults.standard.set(model, forKey: selectedOpenRouterModelKey)
+        openRouterStatusMessage = hasOpenRouterAPIKey ? "OpenRouter model set to \(selectedOpenRouterModelText)." : "Add an OpenRouter API key to use \(selectedOpenRouterModelText)."
+        if selectedProvider == .openRouter {
+            translationStatusMessage = providerReadyMessage(for: .openRouter)
+        }
+    }
+
+    func applyOpenRouterModelSelection() {
+        selectOpenRouterModel(selectedOpenRouterModel)
+        if selectedProvider == .openRouter, isActiveProviderConfigured {
+            regenerateAIResponses()
+        }
+    }
+
+    func saveOpenRouterAPIKey() {
+        let apiKey = openRouterAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !apiKey.isEmpty else {
+            openRouterStatusMessage = "Enter an OpenRouter API key before saving."
+            return
+        }
+
+        do {
+            try KeychainPasswordStore.save(
+                apiKey,
+                service: openRouterKeychainService,
+                account: openRouterKeychainAccount
+            )
+            openRouterAPIKeyInput = ""
+            hasOpenRouterAPIKey = true
+            openRouterStatusMessage = "OpenRouter API key saved in Keychain."
+            if selectedProvider == .openRouter {
+                translationStatusMessage = providerReadyMessage(for: .openRouter)
+                regenerateAIResponses()
+            }
+        } catch {
+            hasOpenRouterAPIKey = KeychainPasswordStore.read(
+                service: openRouterKeychainService,
+                account: openRouterKeychainAccount
+            ) != nil
+            openRouterStatusMessage = "Could not save OpenRouter API key."
+        }
+    }
+
+    func forgetOpenRouterAPIKey() {
+        KeychainPasswordStore.delete(
+            service: openRouterKeychainService,
+            account: openRouterKeychainAccount
+        )
+        openRouterAPIKeyInput = ""
+        hasOpenRouterAPIKey = false
+        openRouterStatusMessage = "OpenRouter API key removed."
+        if selectedProvider == .openRouter {
+            stopAIResponses()
+            germanTranslation = ""
+            translationStatusMessage = providerReadyMessage(for: .openRouter)
+            detailStatusMessage = selectedWordText == nil ? "Click a word to explain it." : providerMissingConfigurationMessage(for: .openRouter, action: "explain this word")
+        }
+    }
+
+    func testOpenRouterConnection() async {
+        guard hasOpenRouterAPIKey else {
+            openRouterStatusMessage = "Add an OpenRouter API key before testing."
+            return
+        }
+        guard !selectedOpenRouterModelText.isEmpty else {
+            openRouterStatusMessage = "Enter an OpenRouter model ID before testing."
+            return
+        }
+
+        isTestingOpenRouter = true
+        openRouterStatusMessage = "Testing OpenRouter with \(selectedOpenRouterModelText)..."
+        defer { isTestingOpenRouter = false }
+
+        do {
+            _ = try await askOpenRouter(prompt: "Reply with OK.")
+            openRouterStatusMessage = "OpenRouter connection works with \(selectedOpenRouterModelText)."
+        } catch {
+            openRouterStatusMessage = "OpenRouter test failed. Check the API key, model ID, and account credits."
+        }
     }
 
     func selectMyLanguage(_ language: LanguageOption) {
         myLanguage = language
         UserDefaults.standard.set(language.rawValue, forKey: myLanguageKey)
-        translationStatusMessage = selectedOllamaModel.isEmpty ? "Choose a local Ollama model to translate." : "Ready to translate with \(selectedOllamaModel)."
-        if !selectedOllamaModel.isEmpty {
+        translationStatusMessage = providerReadyMessage(for: selectedProvider)
+        if isActiveProviderConfigured {
             regenerateAIResponses()
         }
     }
@@ -211,8 +338,8 @@ final class DiscoveryStore: ObservableObject {
         theirLanguage = language
         UserDefaults.standard.set(language.rawValue, forKey: theirLanguageKey)
         reviewStatusMessage = "Write a \(language.name) sentence to review."
-        translationStatusMessage = selectedOllamaModel.isEmpty ? "Choose a local Ollama model to translate." : "Ready to translate with \(selectedOllamaModel)."
-        if !selectedOllamaModel.isEmpty {
+        translationStatusMessage = providerReadyMessage(for: selectedProvider)
+        if isActiveProviderConfigured {
             regenerateAIResponses()
         }
     }
@@ -261,9 +388,9 @@ final class DiscoveryStore: ObservableObject {
 
     func regenerateTranslation() {
         stopTranslation()
-        guard !selectedOllamaModel.isEmpty else {
+        guard isActiveProviderConfigured else {
             germanTranslation = ""
-            translationStatusMessage = "Choose a local Ollama model to use real AI responses."
+            translationStatusMessage = providerMissingConfigurationMessage(for: selectedProvider, action: "use real AI responses")
             return
         }
 
@@ -274,8 +401,8 @@ final class DiscoveryStore: ObservableObject {
         stopDetail()
         if let selectedToken {
             selectedPhrase = nil
-            guard !selectedOllamaModel.isEmpty else {
-                detailStatusMessage = "Choose a local Ollama model to explain this word."
+            guard isActiveProviderConfigured else {
+                detailStatusMessage = providerMissingConfigurationMessage(for: selectedProvider, action: "explain this word")
                 return
             }
             generateAIDetail(for: selectedToken)
@@ -293,7 +420,7 @@ final class DiscoveryStore: ObservableObject {
         translationTask?.cancel()
         translationTask = nil
         isGeneratingTranslation = false
-        if !selectedOllamaModel.isEmpty {
+        if isActiveProviderConfigured {
             translationStatusMessage = "Stopped."
         }
     }
@@ -302,7 +429,7 @@ final class DiscoveryStore: ObservableObject {
         detailTask?.cancel()
         detailTask = nil
         isGeneratingDetail = false
-        if !selectedOllamaModel.isEmpty {
+        if isActiveProviderConfigured {
             detailStatusMessage = selectedWordText == nil ? "Click a word to explain it." : "Stopped."
         }
     }
@@ -311,7 +438,7 @@ final class DiscoveryStore: ObservableObject {
         composerTask?.cancel()
         composerTask = nil
         isGeneratingComposer = false
-        if !selectedOllamaModel.isEmpty {
+        if isActiveProviderConfigured {
             composerStatusMessage = "Stopped."
         }
     }
@@ -320,7 +447,7 @@ final class DiscoveryStore: ObservableObject {
         reviewTask?.cancel()
         reviewTask = nil
         isGeneratingReview = false
-        if !selectedOllamaModel.isEmpty {
+        if isActiveProviderConfigured {
             reviewStatusMessage = "Stopped."
         }
     }
@@ -328,7 +455,7 @@ final class DiscoveryStore: ObservableObject {
     private func generateAITranslation() {
         translationTask?.cancel()
         isGeneratingTranslation = true
-        translationStatusMessage = "Translating with \(selectedOllamaModel)..."
+        translationStatusMessage = "Translating with \(activeModelDisplayName)..."
 
         let prompt = """
         Translate this \(theirLanguage.name) sentence into natural \(myLanguage.name).
@@ -340,15 +467,15 @@ final class DiscoveryStore: ObservableObject {
 
         translationTask = Task {
             do {
-                let response = try await askOllama(prompt: prompt)
+                let response = try await askActiveProvider(prompt: prompt)
                 guard !Task.isCancelled else { return }
                 germanTranslation = response
-                translationStatusMessage = "Translated with \(selectedOllamaModel)."
+                translationStatusMessage = "Translated with \(activeModelDisplayName)."
             } catch is CancellationError {
                 translationStatusMessage = "Translation stopped."
             } catch {
                 germanTranslation = ""
-                translationStatusMessage = "Could not reach Ollama. Check that the local server is running."
+                translationStatusMessage = providerRequestFailureMessage
             }
             isGeneratingTranslation = false
             translationTask = nil
@@ -358,7 +485,7 @@ final class DiscoveryStore: ObservableObject {
     private func generateAIDetail(for token: WordToken) {
         detailTask?.cancel()
         isGeneratingDetail = true
-        detailStatusMessage = "Asking \(selectedOllamaModel)..."
+        detailStatusMessage = "Asking \(activeModelDisplayName)..."
 
         let prompt = """
         You are helping a \(myLanguage.speakerDescription) professional understand \(theirLanguage.name).
@@ -382,15 +509,15 @@ final class DiscoveryStore: ObservableObject {
 
         detailTask = Task {
             do {
-                let response = try await askOllama(prompt: prompt)
+                let response = try await askActiveProvider(prompt: prompt)
                 guard !Task.isCancelled else { return }
                 selectedPhrase = PhraseExplanation.fromModelResponse(response, fallbackWord: token.text)
-                detailStatusMessage = "Generated with \(selectedOllamaModel)."
+                detailStatusMessage = "Generated with \(activeModelDisplayName)."
             } catch is CancellationError {
                 detailStatusMessage = "Explanation stopped."
             } catch {
                 selectedPhrase = nil
-                detailStatusMessage = "Could not reach Ollama. Check that the local server is running."
+                detailStatusMessage = providerRequestFailureMessage
             }
             isGeneratingDetail = false
             detailTask = nil
@@ -401,7 +528,7 @@ final class DiscoveryStore: ObservableObject {
         composerTask?.cancel()
         composerOutputs = .empty
         isGeneratingComposer = true
-        composerStatusMessage = "Composing with \(selectedOllamaModel)..."
+        composerStatusMessage = "Composing with \(activeModelDisplayName)..."
 
         let prompt = """
         You are helping a \(myLanguage.speakerDescription) professional write natural \(theirLanguage.name).
@@ -421,16 +548,16 @@ final class DiscoveryStore: ObservableObject {
 
         composerTask = Task {
             do {
-                let response = try await askOllama(prompt: prompt)
+                let response = try await askActiveProvider(prompt: prompt)
                 guard !Task.isCancelled else { return }
                 composerOutputs = ComposerOutputs.fromModelResponse(response)
                 lastGeneratedComposerInput = input
-                composerStatusMessage = "Composed with \(selectedOllamaModel)."
+                composerStatusMessage = "Composed with \(activeModelDisplayName)."
             } catch is CancellationError {
                 composerStatusMessage = "Composition stopped."
             } catch {
                 composerOutputs = .empty
-                composerStatusMessage = "Could not reach Ollama. Check that the local server is running."
+                composerStatusMessage = providerRequestFailureMessage
             }
             isGeneratingComposer = false
             composerTask = nil
@@ -441,7 +568,7 @@ final class DiscoveryStore: ObservableObject {
         reviewTask?.cancel()
         reviewFeedback = nil
         isGeneratingReview = true
-        reviewStatusMessage = "Reviewing with \(selectedOllamaModel)..."
+        reviewStatusMessage = "Reviewing with \(activeModelDisplayName)..."
 
         let intentBlock = intent.isEmpty ? "No native-language explanation was provided." : intent
         let prompt = """
@@ -478,19 +605,80 @@ final class DiscoveryStore: ObservableObject {
 
         reviewTask = Task {
             do {
-                let response = try await askOllama(prompt: prompt)
+                let response = try await askActiveProvider(prompt: prompt)
                 guard !Task.isCancelled else { return }
                 reviewFeedback = ReviewFeedback.fromModelResponse(response)
                 lastReviewedSentence = sentence
-                reviewStatusMessage = "Reviewed with \(selectedOllamaModel)."
+                reviewStatusMessage = "Reviewed with \(activeModelDisplayName)."
             } catch is CancellationError {
                 reviewStatusMessage = "Review stopped."
             } catch {
                 reviewFeedback = nil
-                reviewStatusMessage = "Could not reach Ollama. Check that the local server is running."
+                reviewStatusMessage = providerRequestFailureMessage
             }
             isGeneratingReview = false
             reviewTask = nil
+        }
+    }
+
+    private var activeModelDisplayName: String {
+        switch selectedProvider {
+        case .ollama:
+            return selectedOllamaModel
+        case .openRouter:
+            return "OpenRouter: \(selectedOpenRouterModelText)"
+        }
+    }
+
+    private var providerRequestFailureMessage: String {
+        switch selectedProvider {
+        case .ollama:
+            return "Could not reach Ollama. Check that the local server is running."
+        case .openRouter:
+            return "OpenRouter request failed. Check the API key, model ID, and account credits."
+        }
+    }
+
+    private func isProviderConfigured(_ provider: AIProvider) -> Bool {
+        switch provider {
+        case .ollama:
+            return !selectedOllamaModel.isEmpty
+        case .openRouter:
+            return hasOpenRouterAPIKey && !selectedOpenRouterModelText.isEmpty
+        }
+    }
+
+    private func providerReadyMessage(for provider: AIProvider) -> String {
+        guard isProviderConfigured(provider) else {
+            return providerMissingConfigurationMessage(for: provider, action: "translate")
+        }
+
+        switch provider {
+        case .ollama:
+            return "Ready to translate with \(selectedOllamaModel)."
+        case .openRouter:
+            return "Ready to translate with OpenRouter: \(selectedOpenRouterModelText)."
+        }
+    }
+
+    private func providerMissingConfigurationMessage(for provider: AIProvider, action: String) -> String {
+        switch provider {
+        case .ollama:
+            return "Choose a local Ollama model to \(action)."
+        case .openRouter:
+            if !hasOpenRouterAPIKey {
+                return "Add an OpenRouter API key to \(action)."
+            }
+            return "Enter an OpenRouter model ID to \(action)."
+        }
+    }
+
+    private func askActiveProvider(prompt: String) async throws -> String {
+        switch selectedProvider {
+        case .ollama:
+            return try await askOllama(prompt: prompt)
+        case .openRouter:
+            return try await askOpenRouter(prompt: prompt)
         }
     }
 
@@ -521,6 +709,50 @@ final class DiscoveryStore: ObservableObject {
 
         let result = try JSONDecoder().decode(OllamaGenerateResponse.self, from: data)
         return result.response.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func askOpenRouter(prompt: String) async throws -> String {
+        guard let url = URL(string: "https://openrouter.ai/api/v1/chat/completions") else {
+            throw URLError(.badURL)
+        }
+        guard let apiKey = KeychainPasswordStore.read(
+            service: openRouterKeychainService,
+            account: openRouterKeychainAccount
+        ), !apiKey.isEmpty else {
+            throw URLError(.userAuthenticationRequired)
+        }
+
+        try Task.checkCancellation()
+
+        let requestBody = OpenRouterChatCompletionRequest(
+            model: selectedOpenRouterModelText,
+            messages: [
+                OpenRouterChatMessage(role: "user", content: prompt)
+            ],
+            temperature: 0.2
+        )
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(requestBody)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try Task.checkCancellation()
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+
+        let result = try JSONDecoder().decode(OpenRouterChatCompletionResponse.self, from: data)
+        guard let content = result.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines),
+              !content.isEmpty else {
+            throw URLError(.zeroByteResource)
+        }
+
+        return content
     }
 }
 
@@ -592,6 +824,31 @@ enum LanguageOption: String, CaseIterable, Identifiable {
     }
 }
 
+enum AIProvider: String, CaseIterable, Identifiable {
+    case ollama
+    case openRouter
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .ollama:
+            return "Ollama"
+        case .openRouter:
+            return "OpenRouter"
+        }
+    }
+
+    static func savedValue(forKey key: String, fallback: AIProvider) -> AIProvider {
+        guard let rawValue = UserDefaults.standard.string(forKey: key),
+              let provider = AIProvider(rawValue: rawValue) else {
+            return fallback
+        }
+
+        return provider
+    }
+}
+
 struct OllamaTagsResponse: Decodable {
     let models: [OllamaModelInfo]
 }
@@ -608,6 +865,94 @@ struct OllamaGenerateRequest: Encodable {
 
 struct OllamaGenerateResponse: Decodable {
     let response: String
+}
+
+struct OpenRouterChatCompletionRequest: Encodable {
+    let model: String
+    let messages: [OpenRouterChatMessage]
+    let temperature: Double
+}
+
+struct OpenRouterChatMessage: Codable {
+    let role: String
+    let content: String
+}
+
+struct OpenRouterChatCompletionResponse: Decodable {
+    let choices: [OpenRouterChoice]
+}
+
+struct OpenRouterChoice: Decodable {
+    let message: OpenRouterChatMessage
+}
+
+enum KeychainPasswordStore {
+    static func read(service: String, account: String) -> String? {
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: account,
+            kSecReturnData: true,
+            kSecMatchLimit: kSecMatchLimitOne
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess,
+              let data = result as? Data else {
+            return nil
+        }
+
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func save(_ password: String, service: String, account: String) throws {
+        let data = Data(password.utf8)
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: account
+        ]
+        let attributes: [CFString: Any] = [
+            kSecValueData: data,
+            kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+
+        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if updateStatus == errSecSuccess {
+            return
+        }
+
+        guard updateStatus == errSecItemNotFound else {
+            throw NSError(
+                domain: NSOSStatusErrorDomain,
+                code: Int(updateStatus),
+                userInfo: nil
+            )
+        }
+
+        var addQuery = query
+        addQuery[kSecValueData] = data
+        addQuery[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            throw NSError(
+                domain: NSOSStatusErrorDomain,
+                code: Int(addStatus),
+                userInfo: nil
+            )
+        }
+    }
+
+    static func delete(service: String, account: String) {
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: account
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
 }
 
 struct AIWordExplanation: Decodable {
@@ -1226,7 +1571,7 @@ struct TranslationSectionView: View {
                         Image(systemName: "arrow.clockwise")
                     }
                     .buttonStyle(.borderless)
-                    .disabled(store.selectedOllamaModel.isEmpty)
+                    .disabled(!store.isActiveProviderConfigured)
                     .help("Refresh translation")
                 }
             }
@@ -1456,7 +1801,7 @@ struct PhraseDetailView: View {
                                 Image(systemName: "arrow.clockwise")
                             }
                             .buttonStyle(.borderless)
-                            .disabled(store.selectedOllamaModel.isEmpty)
+                            .disabled(!store.isActiveProviderConfigured)
                             .help("Refresh explanation")
                         }
                     }
@@ -1796,6 +2141,25 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                settingsSection("Provider") {
+                    Picker(
+                        "AI Provider",
+                        selection: Binding(
+                            get: { store.selectedProvider },
+                            set: { store.selectProvider($0) }
+                        )
+                    ) {
+                        ForEach(AIProvider.allCases) { provider in
+                            Text(provider.name).tag(provider)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(providerPrivacyMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 settingsSection("Languages") {
                     Picker(
                         "Mine",
@@ -1872,6 +2236,73 @@ struct SettingsView: View {
                         }
                     }
                 }
+
+                settingsSection("OpenRouter") {
+                    Text("OpenRouter sends selected text to OpenRouter and the upstream model provider you choose.")
+                        .foregroundStyle(.secondary)
+
+                    SecureField("OpenRouter API key", text: $store.openRouterAPIKeyInput)
+                        .textFieldStyle(.roundedBorder)
+
+                    HStack {
+                        Button("Save Key") {
+                            store.saveOpenRouterAPIKey()
+                        }
+                        .disabled(store.openRouterAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                        Button("Forget Key") {
+                            store.forgetOpenRouterAPIKey()
+                        }
+                        .disabled(!store.hasOpenRouterAPIKey)
+
+                        Spacer()
+
+                        Text(store.hasOpenRouterAPIKey ? "Key stored in Keychain" : "No key stored")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        TextField(
+                            "Model ID",
+                            text: Binding(
+                                get: { store.selectedOpenRouterModel },
+                                set: { store.selectOpenRouterModel($0) }
+                            )
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit {
+                            store.applyOpenRouterModelSelection()
+                        }
+
+                        Button("Use Model") {
+                            store.applyOpenRouterModelSelection()
+                        }
+                        .disabled(store.selectedOpenRouterModelText.isEmpty)
+                    }
+
+                    HStack {
+                        Text(store.openRouterStatusMessage)
+                            .font(.callout)
+                            .foregroundStyle(store.hasOpenRouterAPIKey ? .primary : .secondary)
+                        Spacer()
+                        if store.isTestingOpenRouter {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Button("Test Connection") {
+                                Task {
+                                    await store.testOpenRouterConnection()
+                                }
+                            }
+                            .disabled(!store.hasOpenRouterAPIKey || store.selectedOpenRouterModelText.isEmpty)
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(PrototypeSurface.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
             }
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1886,6 +2317,15 @@ struct SettingsView: View {
             Text(title)
                 .font(.headline)
             content()
+        }
+    }
+
+    private var providerPrivacyMessage: String {
+        switch store.selectedProvider {
+        case .ollama:
+            return "Ollama keeps model calls local on this Mac."
+        case .openRouter:
+            return "OpenRouter uses cloud models. Selected text and prompts leave this Mac."
         }
     }
 }

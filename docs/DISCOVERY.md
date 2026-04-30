@@ -201,6 +201,14 @@ Add entries in this format:
 **Recommendation:** Keep the header focused on modes. Restore Settings as a dedicated screen, expose it from the menu-bar dropdown and standard `Cmd+,` app shortcut, and route shortcut capture to Explain so the contextual path stays quick.
 **Carry forward:** Yes.
 
+### 2026-04-30 - Providers Need A Shared Boundary
+
+**Area:** model providers
+**Observed:** Ollama-specific state and request code had spread across translation, detail, composer, review, and Settings. Adding OpenRouter is much easier when prompts stay shared and only the transport/provider configuration differs.
+**Why it matters:** The real app will likely support multiple providers. Without a shared provider boundary, every new provider would duplicate readiness checks, error messages, and UI logic.
+**Recommendation:** Keep Ollama as the default privacy-first provider, add OpenRouter as an optional cloud provider, store cloud API keys in Keychain, and preserve the provider abstraction so OpenAI API can be added later.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

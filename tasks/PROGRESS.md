@@ -253,3 +253,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Keep the header focused on navigation only. Menu-bar Settings opens the normal window without recapturing text. The global selection shortcut still opens Explain directly.
 **Next step:** Manually verify Settings opens from the status menu and with `Cmd+,`, and that language/model changes persist.
+
+## 2026-04-30 - Added OpenRouter Provider
+
+**Task:** TASK-003
+**Summary:** Added provider selection with Ollama as the default and OpenRouter as an optional cloud provider using manual model IDs and Keychain-backed API key storage.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Keep prompts and parsing shared across providers. Use non-streaming OpenRouter chat completions for the first integration. Store only non-secret provider/model preferences in UserDefaults.
+**Next step:** Manually test OpenRouter with a real API key and model ID, then check Ollama regression paths.
