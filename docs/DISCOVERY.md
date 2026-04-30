@@ -193,6 +193,14 @@ Add entries in this format:
 **Recommendation:** Keep the panel floating, but remove `canJoinAllSpaces`. Use `moveToActiveSpace` so opening the assistant from the menu bar or shortcut presents it on the active Space without making it visible everywhere.
 **Carry forward:** Yes.
 
+### 2026-04-30 - Settings Belong In Their Own Screen
+
+**Area:** navigation
+**Observed:** Keeping language and model controls in the mode bar makes the primary workflow header resize poorly and mixes configuration with task navigation.
+**Why it matters:** The user should be able to steer language/model choices deliberately without those controls competing with Explain, Composer, and Review.
+**Recommendation:** Keep the header focused on modes. Restore Settings as a dedicated screen, expose it from the menu-bar dropdown and standard `Cmd+,` app shortcut, and route shortcut capture to Explain so the contextual path stays quick.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

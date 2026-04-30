@@ -32,6 +32,7 @@ final class DiscoveryStore: ObservableObject {
     @Published var isGeneratingComposer: Bool
     @Published var isGeneratingReview: Bool
     @Published var detailStatusMessage: String
+    @Published var selectedTab: PrototypeTab
 
     private let selectedModelKey = "ContextDiscovery.SelectedOllamaModel"
     private let myLanguageKey = "ContextDiscovery.MyLanguage"
@@ -74,14 +75,11 @@ final class DiscoveryStore: ObservableObject {
         self.isGeneratingComposer = false
         self.isGeneratingReview = false
         self.detailStatusMessage = "Click a word to explain it."
+        self.selectedTab = .explain
     }
 
     var translatedText: String {
         germanTranslation
-    }
-
-    var modelMenuTitle: String {
-        selectedOllamaModel.isEmpty ? "Ollama: None" : "Ollama: \(selectedOllamaModel)"
     }
 
     var composerInputText: String {
@@ -832,39 +830,24 @@ enum SampleText {
 struct AssistantView: View {
     @ObservedObject var store: DiscoveryStore
     let mode: AssistantWindowMode
-    @State private var tab = PrototypeTab.explain
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Picker("", selection: $tab) {
+                Picker("", selection: $store.selectedTab) {
                     ForEach(PrototypeTab.visibleCases) { tab in
                         Text(tab.title).tag(tab)
                     }
                 }
                 .accessibilityLabel("Mode")
                 .pickerStyle(.segmented)
-                .frame(maxWidth: 260)
-
-                Spacer()
-
-                if mode.showsSettingsControls {
-                    languageMenu("Mine", selection: store.myLanguage) { language in
-                        store.selectMyLanguage(language)
-                    }
-
-                    languageMenu("Theirs", selection: store.theirLanguage) { language in
-                        store.selectTheirLanguage(language)
-                    }
-
-                    modelMenu
-                }
+                .frame(maxWidth: 360)
             }
             .padding(12)
 
             Divider()
 
-            switch tab {
+            switch store.selectedTab {
             case .explain:
                 ExplanationView(store: store)
             case .composer:
@@ -884,53 +867,6 @@ struct AssistantView: View {
             await store.refreshOllamaModels()
         }
     }
-
-    private var modelMenu: some View {
-        Menu {
-            Menu("Ollama") {
-                Button("Refresh Models") {
-                    Task {
-                        await store.refreshOllamaModels()
-                    }
-                }
-
-                Divider()
-
-                if store.ollamaModels.isEmpty {
-                    Text(store.isCheckingOllama ? "Checking..." : "No models found")
-                } else {
-                    ForEach(store.ollamaModels, id: \.self) { model in
-                        Button(model) {
-                            store.selectOllamaModel(model)
-                        }
-                    }
-                }
-            }
-        } label: {
-            Text(store.modelMenuTitle)
-                .lineLimit(1)
-        }
-        .menuStyle(.borderlessButton)
-        .frame(maxWidth: 180)
-    }
-
-    private func languageMenu(
-        _ title: String,
-        selection: LanguageOption,
-        onSelect: @escaping (LanguageOption) -> Void
-    ) -> some View {
-        Menu {
-            ForEach(LanguageOption.allCases) { language in
-                Button(language.name) {
-                    onSelect(language)
-                }
-            }
-        } label: {
-            Text("\(title): \(selection.name)")
-                .lineLimit(1)
-        }
-        .menuStyle(.borderlessButton)
-    }
 }
 
 enum PrototypeTab: String, CaseIterable, Identifiable {
@@ -940,7 +876,7 @@ enum PrototypeTab: String, CaseIterable, Identifiable {
     case learn
     case settings
 
-    static let visibleCases: [PrototypeTab] = [.explain, .composer, .review]
+    static let visibleCases: [PrototypeTab] = [.explain, .composer, .review, .settings]
 
     var id: String { rawValue }
 
@@ -1028,15 +964,6 @@ enum AssistantWindowMode {
             return NSSize(width: 1200, height: 900)
         case .bubble:
             return NSSize(width: 920, height: 760)
-        }
-    }
-
-    var showsSettingsControls: Bool {
-        switch self {
-        case .normal:
-            return true
-        case .bubble:
-            return false
         }
     }
 
@@ -1867,61 +1794,99 @@ struct SettingsView: View {
     @ObservedObject var store: DiscoveryStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Local AI")
-                        .font(.headline)
-                    Text("Ollama keeps prototype AI calls local for privacy.")
-                        .foregroundStyle(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                settingsSection("Languages") {
+                    Picker(
+                        "Mine",
+                        selection: Binding(
+                            get: { store.myLanguage },
+                            set: { store.selectMyLanguage($0) }
+                        )
+                    ) {
+                        ForEach(LanguageOption.allCases) { language in
+                            Text(language.name).tag(language)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Picker(
+                        "Theirs",
+                        selection: Binding(
+                            get: { store.theirLanguage },
+                            set: { store.selectTheirLanguage($0) }
+                        )
+                    ) {
+                        ForEach(LanguageOption.allCases) { language in
+                            Text(language.name).tag(language)
+                        }
+                    }
+                    .pickerStyle(.menu)
                 }
-                Spacer()
-                Button("Refresh Models") {
-                    Task {
-                        await store.refreshOllamaModels()
+
+                settingsSection("Local AI") {
+                    HStack {
+                        Text("Ollama keeps prototype AI calls local for privacy.")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Refresh Models") {
+                            Task {
+                                await store.refreshOllamaModels()
+                            }
+                        }
+                    }
+
+                    Text(store.ollamaStatusMessage)
+                        .font(.callout)
+                        .foregroundStyle(store.ollamaModels.isEmpty ? .secondary : .primary)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(PrototypeSurface.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                    if store.isCheckingOllama {
+                        ProgressView("Checking Ollama...")
+                    } else if !store.ollamaModels.isEmpty {
+                        Picker(
+                            "Model",
+                            selection: Binding(
+                                get: { store.selectedOllamaModel },
+                                set: { store.selectOllamaModel($0) }
+                            )
+                        ) {
+                            ForEach(store.ollamaModels, id: \.self) { model in
+                                Text(model).tag(model)
+                            }
+                        }
+                        .pickerStyle(.menu)
+
+                        Text("Selected model is persisted with UserDefaults for this prototype.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Start Ollama, then refresh models.")
+                            Text("Example: `ollama run llama3.2`")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
-
-            Text(store.ollamaStatusMessage)
-                .font(.callout)
-                .foregroundStyle(store.ollamaModels.isEmpty ? .secondary : .primary)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(PrototypeSurface.background)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-
-            if store.isCheckingOllama {
-                ProgressView("Checking Ollama...")
-            } else if !store.ollamaModels.isEmpty {
-                Picker(
-                    "Model",
-                    selection: Binding(
-                        get: { store.selectedOllamaModel },
-                        set: { store.selectOllamaModel($0) }
-                    )
-                ) {
-                    ForEach(store.ollamaModels, id: \.self) { model in
-                        Text(model).tag(model)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                Text("Selected model is persisted with UserDefaults for this prototype.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Start Ollama, then refresh models.")
-                    Text("Example: `ollama run llama3.2`")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(18)
+    }
+
+    private func settingsSection<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.headline)
+            content()
+        }
     }
 }
 
@@ -2262,6 +2227,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
+        appMenu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ","))
+        appMenu.addItem(.separator())
         appMenu.addItem(NSMenuItem(title: "Quit Context", action: #selector(quit), keyEquivalent: "q"))
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
@@ -2289,6 +2256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Open Assistant", action: #selector(openAssistant), keyEquivalent: "e"))
+        menu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: "Recapture Text", action: #selector(recaptureText), keyEquivalent: "r"))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
@@ -2303,6 +2271,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @MainActor
+    @objc private func openSettings() {
+        showAssistant(mode: .normal, recapture: false, selectedTab: .settings)
+    }
+
+    @MainActor
     @objc private func recaptureText() {
         showAssistant(mode: .normal)
     }
@@ -2312,7 +2285,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @MainActor
-    private func showAssistant(mode: AssistantWindowMode, recapture: Bool = true) {
+    private func showAssistant(
+        mode: AssistantWindowMode,
+        recapture: Bool = true,
+        selectedTab: PrototypeTab? = nil
+    ) {
+        if let selectedTab {
+            store.selectedTab = selectedTab
+        }
+
         if recapture {
             store.replaceCapturedText(TextCaptureService.captureText())
         }
@@ -2521,7 +2502,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 if hotKeyID.id == 1 {
                     let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
                     Task { @MainActor in
-                        delegate.showAssistant(mode: .bubble)
+                        delegate.showAssistant(mode: .bubble, selectedTab: .explain)
                     }
                 }
 

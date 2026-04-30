@@ -244,3 +244,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Preserve the user-adjusted `0.1` opacity and centralize the color as `PrototypeSurface.background`.
 **Next step:** Manually inspect text legibility for every mode in the translucent bubble.
+
+## 2026-04-30 - Restored Dedicated Settings Screen
+
+**Task:** TASK-003
+**Summary:** Added Settings back to the mode switcher, moved Mine/Theirs/model controls into Settings, and added Settings entry points from the menu bar and `Cmd+,`.
+**Files changed:** `experiments/swift-discovery/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Keep the header focused on navigation only. Menu-bar Settings opens the normal window without recapturing text. The global selection shortcut still opens Explain directly.
+**Next step:** Manually verify Settings opens from the status menu and with `Cmd+,`, and that language/model changes persist.
