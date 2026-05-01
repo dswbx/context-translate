@@ -82,12 +82,3 @@ A task is complete only when:
 ## Working Style
 
 The product owner steers product direction. LLM agents do the coding, planning, and progress recording. Agents must update the task and progress files so another agent can resume without hidden context.
-
-
-<claude-mem-context>
-# Memory Context
-
-# [context-translate] recent context, 2026-05-01 4:57pm GMT+2
-
-No previous sessions found.
-</claude-mem-context>
