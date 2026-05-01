@@ -78,3 +78,16 @@ A task is complete only when:
 - Do not commit `.superpowers/`, `.DS_Store`, build products, secrets, or local scratch files.
 - Do not rewrite history unless explicitly instructed.
 - Never delete user work unless explicitly asked.
+
+## Working Style
+
+The product owner steers product direction. LLM agents do the coding, planning, and progress recording. Agents must update the task and progress files so another agent can resume without hidden context.
+
+
+<claude-mem-context>
+# Memory Context
+
+# [context-translate] recent context, 2026-05-01 4:51pm GMT+2
+
+No previous sessions found.
+</claude-mem-context>

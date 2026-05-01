@@ -46,21 +46,10 @@ cd poc
 bash scripts/dev-watch.sh
 ```
 
-## How To Navigate
+To create an interim local `.app` bundle:
 
-- `docs/IDEA.md`: original rough product idea
-- `docs/PRODUCT.md`: cleaned product brief
-- `docs/MVP.md`: MVP scope and guardrails
-- `docs/TERMINOLOGY.md`: shared product language
-- `docs/DISCOVERY.md`: discovery prototype goals and findings
-- `docs/DECISIONS.md`: durable product and technical decisions
-- `docs/QUESTIONS.md`: open product questions
-- `docs/ROADMAP.md`: phase roadmap
-- `tasks/TASKS.md`: backlog
-- `tasks/CURRENT.md`: active task and checkpoint
-- `tasks/PROGRESS.md`: chronological progress log
-- `experiments/poc/`: runnable macOS proof of concept
-
-## Working Style
-
-The product owner steers product direction. LLM agents do the coding, planning, and progress recording. Agents must update the task and progress files so another agent can resume without hidden context.
+```bash
+cd poc
+bash scripts/package-app.sh
+open "dist/Context Translate POC.app"
+```
