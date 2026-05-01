@@ -8,7 +8,7 @@ The prototype should answer practical questions that static plans and mockups ca
 
 ## Prototype Location
 
-`experiments/swift-discovery/`
+`experiments/poc/`
 
 ## Prototype Constraints
 
@@ -78,7 +78,7 @@ Add entries in this format:
 **Area:** macOS app shape
 **Observed:** A Swift Package executable can build and launch an AppKit/SwiftUI accessory app with a menu bar item, floating panel, clipboard fallback, and stubbed explanation/composer/review flows.
 **Why it matters:** The discovery prototype does not require a full Xcode project yet. This keeps iteration lightweight while still testing real macOS window and menu behavior.
-**Recommendation:** Continue discovery in `experiments/swift-discovery/` with SwiftPM until signing, previews, asset catalogs, or Xcode-specific project behavior becomes necessary.
+**Recommendation:** Continue discovery in `experiments/poc/` with SwiftPM until signing, previews, asset catalogs, or Xcode-specific project behavior becomes necessary.
 **Carry forward:** Yes.
 
 ### 2026-04-29 - SwiftPM Needs Normal User Cache Access

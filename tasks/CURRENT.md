@@ -4,7 +4,7 @@
 
 **Task ID:** TASK-003
 **Status:** active
-**Title:** One-Shot Swift Discovery Prototype
+**Title:** Swift POC
 
 ## Current Checkpoint
 
@@ -20,7 +20,7 @@ None.
 
 ## Discovery Notes
 
-The prototype builds and runs via `swift run` in `experiments/swift-discovery/`. It should stay disposable by default.
+The POC builds and runs via `swift run` in `experiments/poc/`. It should stay disposable by default.
 
 ## Handoff Notes
 

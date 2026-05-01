@@ -4,9 +4,9 @@ A native macOS language assistant for non-native English speakers. The app helps
 
 ## Current Phase
 
-This repository is in the discovery phase.
+This repository is in the proof-of-concept phase.
 
-Before building the durable MVP, we will create a disposable Swift/SwiftUI prototype under `experiments/swift-discovery/` to learn from real macOS behavior:
+Before building the durable MVP, we are iterating on a Swift/SwiftUI proof of concept under `experiments/poc/` to learn from real macOS behavior:
 
 - menu-bar app lifecycle
 - global shortcut or trigger flow
@@ -17,7 +17,32 @@ Before building the durable MVP, we will create a disposable Swift/SwiftUI proto
 - phrase composer
 - basic local persistence feel
 
-The prototype is a learning artifact. It is not the production app foundation by default.
+The POC is a learning artifact. It is not the production app foundation by default, but it is runnable for product feedback.
+
+## Run The POC
+
+Requirements:
+
+- macOS
+- Xcode Command Line Tools or Xcode with Swift installed
+- optional: Ollama running locally for local AI responses
+- optional: OpenRouter API key for cloud model responses
+
+Run:
+
+```bash
+cd experiments/poc
+swift run
+```
+
+The app appears in the macOS menu bar as `Context`. Use `Open Assistant` from the menu bar, or press `Command+Option+E` to open the floating bubble from the current selection.
+
+For restart-on-change while editing:
+
+```bash
+cd experiments/poc
+bash scripts/dev-watch.sh
+```
 
 ## How To Navigate
 
@@ -32,7 +57,7 @@ The prototype is a learning artifact. It is not the production app foundation by
 - `tasks/TASKS.md`: backlog
 - `tasks/CURRENT.md`: active task and checkpoint
 - `tasks/PROGRESS.md`: chronological progress log
-- `experiments/`: disposable prototypes and experiments
+- `experiments/poc/`: runnable macOS proof of concept
 
 ## Working Style
 

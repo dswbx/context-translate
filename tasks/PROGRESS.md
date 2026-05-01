@@ -289,3 +289,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Keep an accessibility label on the picker while avoiding duplicate visible text.
 **Next step:** Manually inspect Settings for cleaner spacing around the provider picker.
+
+## 2026-05-01 - Renamed Prototype To POC
+
+**Task:** TASK-003
+**Summary:** Renamed the runnable Swift experiment from `experiments/swift-discovery/` to `experiments/poc/` and added public run instructions.
+**Files changed:** `README.md`, `experiments/README.md`, `experiments/poc/README.md`, `experiments/poc/Package.swift`, `docs/DISCOVERY.md`, `docs/DECISIONS.md`, `docs/ROADMAP.md`, `docs/TERMINOLOGY.md`, `tasks/CURRENT.md`, `tasks/TASKS.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Keep the app as a SwiftPM POC for now, but make it easy for others to run locally.
+**Next step:** Merge the POC branch into `main` so collaborators can pull and run it.

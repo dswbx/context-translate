@@ -3,13 +3,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "ContextTranslateDiscovery",
+    name: "ContextTranslatePOC",
     platforms: [
         .macOS(.v13)
     ],
     products: [
         .executable(
-            name: "context-translate-discovery",
+            name: "context-translate-poc",
             targets: ["ContextTranslateDiscovery"]
         )
     ],

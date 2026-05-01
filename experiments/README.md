@@ -1,6 +1,6 @@
 # Experiments
 
-This directory contains disposable prototypes and technical spikes.
+This directory contains proof-of-concept prototypes and technical spikes.
 
 ## Rules
 
@@ -13,4 +13,4 @@ This directory contains disposable prototypes and technical spikes.
 
 ## Current Experiments
 
-- `swift-discovery/`: native macOS discovery prototype.
+- `poc/`: runnable native macOS proof of concept.

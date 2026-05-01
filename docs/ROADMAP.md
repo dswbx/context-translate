@@ -12,7 +12,7 @@ Exit criteria:
 
 ## Phase 1: Discovery Prototype
 
-Create a disposable Swift/SwiftUI macOS prototype under `experiments/swift-discovery/`.
+Create a disposable Swift/SwiftUI macOS proof of concept under `experiments/poc/`.
 
 Exit criteria:
 

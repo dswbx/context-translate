@@ -26,13 +26,13 @@
 - Prototype must-have behaviors are listed.
 - Stubbed data and responses are defined.
 - Product review questions are listed.
-- Build/run expectations are documented in `experiments/swift-discovery/README.md`.
+- Build/run expectations are documented in `experiments/poc/README.md`.
 
-### TASK-003: One-Shot Swift Discovery Prototype
+### TASK-003: Swift POC
 
 **Status:** active
 **Owner type:** agent
-**Goal:** Create a disposable Swift/SwiftUI macOS prototype under `experiments/swift-discovery/`.
+**Goal:** Create a disposable Swift/SwiftUI macOS prototype under `experiments/poc/`.
 **Acceptance criteria:**
 
 - Prototype runs locally on macOS.
