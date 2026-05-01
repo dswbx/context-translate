@@ -18,7 +18,7 @@ Durable product and technical decisions go here. Use this file for choices that 
 **Status:** accepted
 **Context:** A polished plan can fail when native macOS realities appear, especially around selected text capture, permissions, floating windows, and menu-bar app behavior.
 **Decision:** Build a disposable Swift/SwiftUI discovery prototype before planning the production MVP.
-**Consequences:** The repository will include `experiments/poc/` and `docs/DISCOVERY.md`. Prototype code is not the production foundation by default.
+**Consequences:** The repository will include `poc/` and `docs/DISCOVERY.md`. Prototype code is not the production foundation by default.
 
 ## 2026-04-29 - Product Owner Steers Product, Agents Handle Code
 

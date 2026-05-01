@@ -44,6 +44,17 @@ Expected behavior:
 - The app tries Accessibility selection first, then temporary copy-restore, then clipboard fallback.
 - Settings are available from the app menu, the status menu, and `Command+,`.
 
+## Build Interim App Bundle
+
+To create a local `.app` bundle that is easier to share or drag into Applications:
+
+```bash
+bash scripts/package-app.sh
+open "dist/Context Translate POC.app"
+```
+
+The script builds the release executable, wraps it in `dist/Context Translate POC.app`, and ad-hoc signs the bundle when `codesign` is available. This is only an interim local bundle; it is not notarized and is not a production distribution flow.
+
 ## AI Providers
 
 The POC supports:

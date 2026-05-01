@@ -20,7 +20,7 @@ None.
 
 ## Discovery Notes
 
-The POC builds and runs via `swift run` in `experiments/poc/`. It should stay disposable by default.
+The POC builds and runs via `swift run` in `poc/`. It should stay disposable by default.
 
 ## Handoff Notes
 

@@ -13,4 +13,4 @@ This directory contains proof-of-concept prototypes and technical spikes.
 
 ## Current Experiments
 
-- `poc/`: runnable native macOS proof of concept.
+No active top-level experiment lives here right now. The runnable native macOS proof of concept moved to `../poc/`.

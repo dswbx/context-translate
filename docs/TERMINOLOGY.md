@@ -160,7 +160,7 @@ The prototype should signal the active capture method so the user knows whether 
 
 ### Proof Of Concept
 
-The disposable Swift/SwiftUI prototype under `experiments/poc/`.
+The disposable Swift/SwiftUI prototype under `poc/`.
 
 Its job is to reveal product, UX, and macOS constraints before the real MVP plan. It is not the production app foundation by default.
 

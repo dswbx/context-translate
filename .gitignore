@@ -12,6 +12,7 @@
 .build/
 Build/
 DerivedData/
+poc/dist/
 *.xcuserdata/
 *.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/

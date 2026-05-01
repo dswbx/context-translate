@@ -307,3 +307,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `bash experiments/poc/scripts/reset-settings.sh`
 **Decisions made:** Delete only known POC keys across likely SwiftPM defaults domains instead of wiping entire domains.
 **Next step:** Use the reset script before product demos when first-launch behavior needs to be checked.
+
+## 2026-05-01 - Moved POC To Top Level And Added App Bundle Script
+
+**Task:** TASK-003
+**Summary:** Moved the runnable Swift proof of concept to top-level `poc/` and added an interim script that packages it as a local `.app` bundle.
+**Files changed:** `.gitignore`, `README.md`, `AGENTS.md`, `experiments/README.md`, `poc/README.md`, `poc/scripts/package-app.sh`, `docs/DISCOVERY.md`, `docs/DECISIONS.md`, `docs/ROADMAP.md`, `docs/TERMINOLOGY.md`, `tasks/CURRENT.md`, `tasks/TASKS.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift package clean`; `swift build`; `bash scripts/package-app.sh`; `test -x "poc/dist/Context Translate POC.app/Contents/MacOS/context-translate-poc"`; `plutil -lint "poc/dist/Context Translate POC.app/Contents/Info.plist"`; `codesign --verify --deep --strict "poc/dist/Context Translate POC.app"`
+**Decisions made:** Keep SwiftPM as the POC build source and use an ad-hoc signed local `.app` only as a convenience for sharing during discovery.
+**Next step:** Share the top-level `poc/` run instructions and the generated interim app bundle path with testers.

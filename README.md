@@ -6,7 +6,7 @@ A native macOS language assistant for non-native English speakers. The app helps
 
 This repository is in the proof-of-concept phase.
 
-Before building the durable MVP, we are iterating on a Swift/SwiftUI proof of concept under `experiments/poc/` to learn from real macOS behavior:
+Before building the durable MVP, we are iterating on a Swift/SwiftUI proof of concept under `poc/` to learn from real macOS behavior:
 
 - menu-bar app lifecycle
 - global shortcut or trigger flow
@@ -31,7 +31,7 @@ Requirements:
 Run:
 
 ```bash
-cd experiments/poc
+cd poc
 swift run
 ```
 
@@ -40,7 +40,7 @@ The app appears in the macOS menu bar as `Context`. Use `Open Assistant` from th
 For restart-on-change while editing:
 
 ```bash
-cd experiments/poc
+cd poc
 bash scripts/dev-watch.sh
 ```
 

@@ -19,7 +19,7 @@ If a file does not exist yet, create it only when the active task asks for it.
 
 ## Current Strategy
 
-We will not start with the production app. First, iterate on the disposable Swift/SwiftUI proof of concept under `experiments/poc/`.
+We will not start with the production app. First, iterate on the disposable Swift/SwiftUI proof of concept under `poc/`.
 
 The prototype should teach us about:
 

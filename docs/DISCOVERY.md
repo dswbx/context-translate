@@ -8,7 +8,7 @@ The prototype should answer practical questions that static plans and mockups ca
 
 ## Prototype Location
 
-`experiments/poc/`
+`poc/`
 
 ## Prototype Constraints
 
@@ -78,7 +78,7 @@ Add entries in this format:
 **Area:** macOS app shape
 **Observed:** A Swift Package executable can build and launch an AppKit/SwiftUI accessory app with a menu bar item, floating panel, clipboard fallback, and stubbed explanation/composer/review flows.
 **Why it matters:** The discovery prototype does not require a full Xcode project yet. This keeps iteration lightweight while still testing real macOS window and menu behavior.
-**Recommendation:** Continue discovery in `experiments/poc/` with SwiftPM until signing, previews, asset catalogs, or Xcode-specific project behavior becomes necessary.
+**Recommendation:** Continue discovery in `poc/` with SwiftPM until signing, previews, asset catalogs, or Xcode-specific project behavior becomes necessary.
 **Carry forward:** Yes.
 
 ### 2026-04-29 - SwiftPM Needs Normal User Cache Access
@@ -215,6 +215,14 @@ Add entries in this format:
 **Observed:** A SwiftPM debug executable launched with `swift run` can repeatedly trigger Keychain permission prompts even after choosing "Always Allow", especially after rebuilds.
 **Why it matters:** Keychain trust is tied to app/code identity. The real app needs a stable signed bundle identity, while the discovery prototype should avoid unnecessary Keychain reads.
 **Recommendation:** Do not read Keychain on startup just to populate UI. Cache credentials in memory after first successful read/save during a run. For the real app, use a signed `.app` bundle with a stable bundle identifier.
+**Carry forward:** Yes.
+
+### 2026-05-01 - Interim App Bundle Makes POC Easier To Share
+
+**Area:** build tooling
+**Observed:** The POC can be wrapped from SwiftPM output into a minimal local `.app` bundle with a stable bundle identifier and ad-hoc signature.
+**Why it matters:** People can try the POC without running `swift run`, and the bundle shape is closer to how macOS treats a real app.
+**Recommendation:** Use `poc/scripts/package-app.sh` for lightweight sharing during discovery. Treat it as an interim local bundle, not a notarized distribution path.
 **Carry forward:** Yes.
 
 ## Extraction Checklist
