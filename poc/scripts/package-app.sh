@@ -7,6 +7,9 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_NAME="Context Translate POC"
 BUNDLE_ID="dev.contexttranslate.poc"
 EXECUTABLE_NAME="context-translate-poc"
+VERSION_FILE="$ROOT_DIR/VERSION"
+APP_VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
+BUILD_NUMBER="$APP_VERSION"
 CONFIGURATION="${CONFIGURATION:-release}"
 APP_OUTPUT_DIR="$ROOT_DIR/dist"
 APP_PATH="$APP_OUTPUT_DIR/$APP_NAME.app"
@@ -17,7 +20,16 @@ BUILT_EXECUTABLE="$ROOT_DIR/.build/$CONFIGURATION/$EXECUTABLE_NAME"
 
 cd "$ROOT_DIR"
 
-echo "Building $EXECUTABLE_NAME ($CONFIGURATION)..."
+if [[ -z "$APP_VERSION" ]]; then
+  echo "VERSION file is empty: $VERSION_FILE" >&2
+  exit 1
+fi
+
+if [[ "$APP_VERSION" =~ ^poc-([0-9]+)$ ]]; then
+  BUILD_NUMBER="${BASH_REMATCH[1]}"
+fi
+
+echo "Building $EXECUTABLE_NAME $APP_VERSION ($CONFIGURATION)..."
 swift build -c "$CONFIGURATION"
 
 echo "Creating $APP_PATH..."
@@ -46,9 +58,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
-  <string>0.1.0</string>
+  <string>$BUILD_NUMBER</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
   <key>LSUIElement</key>
@@ -69,6 +81,7 @@ fi
 
 echo
 echo "Created: $APP_PATH"
+echo "Version: $APP_VERSION"
 echo "Open it with:"
 echo "  open \"$APP_PATH\""
 echo

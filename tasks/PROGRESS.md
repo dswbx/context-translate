@@ -325,3 +325,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`; `bash scripts/package-app.sh`
 **Decisions made:** Keep setup concerns in Settings for the POC and default the global popover shortcut to `Command+Option+E`.
 **Next step:** Manually verify the first-launch Settings state after running `bash poc/scripts/reset-settings.sh`.
+
+## 2026-05-01 - Added POC Version And Release Workflow
+
+**Task:** TASK-003
+**Summary:** Added a `poc/VERSION` source of truth, stamped it into the interim app bundle, and added a manual GitHub Action that increments the version, builds the app, and attaches it to a release.
+**Files changed:** `.github/workflows/release-poc.yml`, `poc/VERSION`, `poc/scripts/package-app.sh`, `poc/README.md`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `bash -n poc/scripts/package-app.sh`; `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/release-poc.yml"); puts "workflow yaml ok"'`; `swift build`; `bash scripts/package-app.sh`; `plutil -extract CFBundleShortVersionString raw "poc/dist/Context Translate POC.app/Contents/Info.plist"`; `plutil -extract CFBundleVersion raw "poc/dist/Context Translate POC.app/Contents/Info.plist"`; `plutil -lint "poc/dist/Context Translate POC.app/Contents/Info.plist"`; `codesign --verify --deep --strict "poc/dist/Context Translate POC.app"`; `test -x "poc/dist/Context Translate POC.app/Contents/MacOS/context-translate-poc"`
+**Decisions made:** Use simple incrementing POC versions like `poc-1`, `poc-2` instead of semantic versioning during discovery.
+**Next step:** Run the workflow manually when a shareable POC build should be published.

@@ -233,6 +233,14 @@ Add entries in this format:
 **Recommendation:** Open Settings on first launch, show yellow setup warnings for missing Accessibility and model configuration, and keep trigger preferences visible there.
 **Carry forward:** Yes.
 
+### 2026-05-01 - POC Releases Can Use Simple Incrementing Versions
+
+**Area:** build tooling
+**Observed:** The POC does not need semantic versioning yet. A plain `poc-N` version file is enough to identify downloadable builds.
+**Why it matters:** Testers need a clear artifact version, but production release discipline would be premature during discovery.
+**Recommendation:** Use `poc/VERSION` as the source of truth, stamp it into the interim app bundle, and let the manual GitHub release workflow increment it before publishing.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

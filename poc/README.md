@@ -57,6 +57,12 @@ open "dist/Context Translate POC.app"
 
 The script builds the release executable, wraps it in `dist/Context Translate POC.app`, and ad-hoc signs the bundle when `codesign` is available. This is only an interim local bundle; it is not notarized and is not a production distribution flow.
 
+The app bundle version comes from `VERSION`. During the POC, versions use a simple incrementing format like `poc-1`, `poc-2`, and so on.
+
+## GitHub Release
+
+The manual `Release POC App` GitHub Action increments `VERSION`, commits the bump, builds the `.app`, zips it, and attaches the zip to a GitHub Release tagged with the same version.
+
 ## AI Providers
 
 The POC supports:

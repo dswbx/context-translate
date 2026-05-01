@@ -1,0 +1,95 @@
+name: Release POC App
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-poc
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and release POC
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Increment POC version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version_file="poc/VERSION"
+          current="$(tr -d '[:space:]' < "$version_file")"
+
+          if [[ "$current" =~ ^poc-([0-9]+)$ ]]; then
+            next="poc-$((${BASH_REMATCH[1]} + 1))"
+          else
+            echo "Expected $version_file to look like poc-N, got: $current" >&2
+            exit 1
+          fi
+
+          printf '%s\n' "$next" > "$version_file"
+
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Commit version bump
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF_TYPE}" != "branch" ]]; then
+            echo "Run this workflow from a branch, not a tag." >&2
+            exit 1
+          fi
+
+          git add poc/VERSION
+          git commit -m "chore: release ${{ steps.version.outputs.version }}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Build app bundle
+        working-directory: poc
+        run: bash scripts/package-app.sh
+
+      - name: Archive app bundle
+        id: archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          asset="Context-Translate-POC-${{ steps.version.outputs.version }}.zip"
+          cd poc/dist
+          ditto -c -k --keepParent "Context Translate POC.app" "../../$asset"
+          cd ../..
+
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+          echo "path=$PWD/$asset" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_sha="$(git rev-parse HEAD)"
+          gh release create "${{ steps.version.outputs.version }}" \
+            "${{ steps.archive.outputs.path }}" \
+            --target "$release_sha" \
+            --title "Context Translate POC ${{ steps.version.outputs.version }}" \
+            --notes "Interim Context Translate POC build ${{ steps.version.outputs.version }}. This app bundle is ad-hoc signed and not notarized."
