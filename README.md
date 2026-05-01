@@ -2,7 +2,7 @@
 
 A native macOS language assistant for non-native English speakers. The app helps users understand selected English text in context, inspect confusing phrases, compose natural English from their own language, review English they wrote, and learn saved phrases over time.
 
-[Watch the POC demo](.github/assets/poc_demo_o.mp4)
+https://github.com/user-attachments/assets/71912beb-aaac-4c8c-aee8-d8e5a23e5bbf
 
 ## Current Phase
 
