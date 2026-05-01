@@ -24,4 +24,4 @@ The POC builds and runs via `swift run` in `poc/`. It should stay disposable by 
 
 ## Handoff Notes
 
-Record product feedback and macOS behavior findings in `docs/DISCOVERY.md`.
+Verify the first-launch Settings flow, menu-bar visibility toggle, Accessibility/model warnings, and recorded shortcut behavior in the running POC.

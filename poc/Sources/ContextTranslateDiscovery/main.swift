@@ -40,12 +40,18 @@ final class DiscoveryStore: ObservableObject {
     @Published var isGeneratingReview: Bool
     @Published var detailStatusMessage: String
     @Published var selectedTab: PrototypeTab
+    @Published var showsMenuBarItem: Bool
+    @Published var globalShortcut: GlobalShortcut
+    @Published var isRecordingShortcut: Bool
 
     private let selectedModelKey = "ContextDiscovery.SelectedOllamaModel"
     private let selectedProviderKey = "ContextDiscovery.SelectedProvider"
     private let selectedOpenRouterModelKey = "ContextDiscovery.SelectedOpenRouterModel"
     private let myLanguageKey = "ContextDiscovery.MyLanguage"
     private let theirLanguageKey = "ContextDiscovery.TheirLanguage"
+    private let showsMenuBarItemKey = "ContextDiscovery.ShowsMenuBarItem"
+    private let shortcutKeyCodeKey = "ContextDiscovery.Shortcut.KeyCode"
+    private let shortcutModifiersKey = "ContextDiscovery.Shortcut.Modifiers"
     private let openRouterKeychainService = "ContextTranslateDiscovery.OpenRouter"
     private let openRouterKeychainAccount = "apiKey"
     private let openRouterHasAPIKeyKey = "ContextDiscovery.OpenRouter.HasAPIKey"
@@ -57,12 +63,21 @@ final class DiscoveryStore: ObservableObject {
     private var lastGeneratedComposerInput: String?
     private var lastReviewedSentence: String?
     private var cachedOpenRouterAPIKey: String?
+    private var shortcutRecordingMonitor: Any?
+    var menuBarVisibilityDidChange: ((Bool) -> Void)?
+    var shortcutDidChange: ((GlobalShortcut) -> Void)?
 
     init(capture: TextCaptureResult) {
         let savedMyLanguage = LanguageOption.savedValue(forKey: myLanguageKey, fallback: .german)
         let savedTheirLanguage = LanguageOption.savedValue(forKey: theirLanguageKey, fallback: .english)
         let savedProvider = AIProvider.savedValue(forKey: selectedProviderKey, fallback: .ollama)
         let hasOpenRouterKey = UserDefaults.standard.bool(forKey: openRouterHasAPIKeyKey)
+        let savedShowsMenuBarItem = UserDefaults.standard.object(forKey: showsMenuBarItemKey) as? Bool ?? true
+        let savedShortcut = GlobalShortcut.savedValue(
+            keyCodeKey: shortcutKeyCodeKey,
+            modifiersKey: shortcutModifiersKey,
+            fallback: .defaultShortcut
+        )
 
         self.capturedText = capture.text
         self.captureStatusMessage = capture.statusMessage
@@ -97,6 +112,9 @@ final class DiscoveryStore: ObservableObject {
         self.isGeneratingReview = false
         self.detailStatusMessage = "Click a word to explain it."
         self.selectedTab = .explain
+        self.showsMenuBarItem = savedShowsMenuBarItem
+        self.globalShortcut = savedShortcut
+        self.isRecordingShortcut = false
         self.translationStatusMessage = providerReadyMessage(for: savedProvider)
     }
 
@@ -134,6 +152,22 @@ final class DiscoveryStore: ObservableObject {
 
     var selectedOpenRouterModelText: String {
         selectedOpenRouterModel.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var isAccessibilityGranted: Bool {
+        AXIsProcessTrusted()
+    }
+
+    var activeProviderConfigurationWarning: String? {
+        guard !isActiveProviderConfigured else {
+            return nil
+        }
+
+        return providerMissingConfigurationMessage(for: selectedProvider, action: "generate responses")
+    }
+
+    var shortcutRecordingStatus: String {
+        isRecordingShortcut ? "Press the shortcut you want to use." : "Current shortcut: \(globalShortcut.displayName)"
     }
 
     func replaceCapturedText(_ capture: TextCaptureResult) {
@@ -239,6 +273,39 @@ final class DiscoveryStore: ObservableObject {
         } else {
             stopAIResponses()
         }
+    }
+
+    func setShowsMenuBarItem(_ isVisible: Bool) {
+        showsMenuBarItem = isVisible
+        UserDefaults.standard.set(isVisible, forKey: showsMenuBarItemKey)
+        menuBarVisibilityDidChange?(isVisible)
+    }
+
+    func beginShortcutRecording() {
+        stopShortcutRecording()
+        isRecordingShortcut = true
+        shortcutRecordingMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else {
+                return event
+            }
+
+            Task { @MainActor in
+                self.handleShortcutRecordingEvent(event)
+            }
+            return nil
+        }
+    }
+
+    func cancelShortcutRecording() {
+        stopShortcutRecording()
+    }
+
+    func openAccessibilitySettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else {
+            return
+        }
+
+        NSWorkspace.shared.open(url)
     }
 
     func selectOpenRouterModel(_ model: String) {
@@ -771,6 +838,31 @@ final class DiscoveryStore: ObservableObject {
         UserDefaults.standard.set(true, forKey: openRouterHasAPIKeyKey)
         return apiKey
     }
+
+    private func handleShortcutRecordingEvent(_ event: NSEvent) {
+        if event.keyCode == UInt16(kVK_Escape) {
+            stopShortcutRecording()
+            return
+        }
+
+        guard let shortcut = GlobalShortcut(event: event) else {
+            return
+        }
+
+        globalShortcut = shortcut
+        UserDefaults.standard.set(Int(shortcut.keyCode), forKey: shortcutKeyCodeKey)
+        UserDefaults.standard.set(Int(shortcut.modifiers), forKey: shortcutModifiersKey)
+        shortcutDidChange?(shortcut)
+        stopShortcutRecording()
+    }
+
+    private func stopShortcutRecording() {
+        if let shortcutRecordingMonitor {
+            NSEvent.removeMonitor(shortcutRecordingMonitor)
+            self.shortcutRecordingMonitor = nil
+        }
+        isRecordingShortcut = false
+    }
 }
 
 struct WordToken: Identifiable {
@@ -839,6 +931,138 @@ enum LanguageOption: String, CaseIterable, Identifiable {
 
         return language
     }
+}
+
+struct GlobalShortcut: Equatable {
+    let keyCode: UInt32
+    let modifiers: UInt32
+
+    static let defaultShortcut = GlobalShortcut(
+        keyCode: UInt32(kVK_ANSI_E),
+        modifiers: UInt32(cmdKey | optionKey)
+    )
+
+    init(keyCode: UInt32, modifiers: UInt32) {
+        self.keyCode = keyCode
+        self.modifiers = modifiers
+    }
+
+    init?(event: NSEvent) {
+        let carbonModifiers = GlobalShortcut.carbonModifiers(from: event.modifierFlags)
+        guard carbonModifiers != 0,
+              event.keyCode != UInt16(kVK_Escape),
+              event.charactersIgnoringModifiers?.isEmpty == false else {
+            return nil
+        }
+
+        self.keyCode = UInt32(event.keyCode)
+        self.modifiers = carbonModifiers
+    }
+
+    var displayName: String {
+        "\(modifierDisplayName)\(keyDisplayName)"
+    }
+
+    static func savedValue(keyCodeKey: String, modifiersKey: String, fallback: GlobalShortcut) -> GlobalShortcut {
+        guard UserDefaults.standard.object(forKey: keyCodeKey) != nil,
+              UserDefaults.standard.object(forKey: modifiersKey) != nil else {
+            return fallback
+        }
+
+        let keyCode = UserDefaults.standard.integer(forKey: keyCodeKey)
+        let modifiers = UserDefaults.standard.integer(forKey: modifiersKey)
+        guard modifiers > 0 else {
+            return fallback
+        }
+
+        return GlobalShortcut(keyCode: UInt32(keyCode), modifiers: UInt32(modifiers))
+    }
+
+    private var modifierDisplayName: String {
+        var parts: [String] = []
+        if modifiers & UInt32(controlKey) != 0 { parts.append("Control") }
+        if modifiers & UInt32(optionKey) != 0 { parts.append("Option") }
+        if modifiers & UInt32(shiftKey) != 0 { parts.append("Shift") }
+        if modifiers & UInt32(cmdKey) != 0 { parts.append("Command") }
+        return parts.isEmpty ? "" : parts.joined(separator: "+") + "+"
+    }
+
+    private var keyDisplayName: String {
+        GlobalShortcut.keyNames[keyCode] ?? "Key \(keyCode)"
+    }
+
+    private static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
+        var result: UInt32 = 0
+        if flags.contains(.command) { result |= UInt32(cmdKey) }
+        if flags.contains(.option) { result |= UInt32(optionKey) }
+        if flags.contains(.shift) { result |= UInt32(shiftKey) }
+        if flags.contains(.control) { result |= UInt32(controlKey) }
+        return result
+    }
+
+    private static let keyNames: [UInt32: String] = [
+        UInt32(kVK_ANSI_A): "A",
+        UInt32(kVK_ANSI_B): "B",
+        UInt32(kVK_ANSI_C): "C",
+        UInt32(kVK_ANSI_D): "D",
+        UInt32(kVK_ANSI_E): "E",
+        UInt32(kVK_ANSI_F): "F",
+        UInt32(kVK_ANSI_G): "G",
+        UInt32(kVK_ANSI_H): "H",
+        UInt32(kVK_ANSI_I): "I",
+        UInt32(kVK_ANSI_J): "J",
+        UInt32(kVK_ANSI_K): "K",
+        UInt32(kVK_ANSI_L): "L",
+        UInt32(kVK_ANSI_M): "M",
+        UInt32(kVK_ANSI_N): "N",
+        UInt32(kVK_ANSI_O): "O",
+        UInt32(kVK_ANSI_P): "P",
+        UInt32(kVK_ANSI_Q): "Q",
+        UInt32(kVK_ANSI_R): "R",
+        UInt32(kVK_ANSI_S): "S",
+        UInt32(kVK_ANSI_T): "T",
+        UInt32(kVK_ANSI_U): "U",
+        UInt32(kVK_ANSI_V): "V",
+        UInt32(kVK_ANSI_W): "W",
+        UInt32(kVK_ANSI_X): "X",
+        UInt32(kVK_ANSI_Y): "Y",
+        UInt32(kVK_ANSI_Z): "Z",
+        UInt32(kVK_ANSI_0): "0",
+        UInt32(kVK_ANSI_1): "1",
+        UInt32(kVK_ANSI_2): "2",
+        UInt32(kVK_ANSI_3): "3",
+        UInt32(kVK_ANSI_4): "4",
+        UInt32(kVK_ANSI_5): "5",
+        UInt32(kVK_ANSI_6): "6",
+        UInt32(kVK_ANSI_7): "7",
+        UInt32(kVK_ANSI_8): "8",
+        UInt32(kVK_ANSI_9): "9",
+        UInt32(kVK_Return): "Return",
+        UInt32(kVK_Tab): "Tab",
+        UInt32(kVK_Space): "Space",
+        UInt32(kVK_Delete): "Delete",
+        UInt32(kVK_ForwardDelete): "Forward Delete",
+        UInt32(kVK_Home): "Home",
+        UInt32(kVK_End): "End",
+        UInt32(kVK_PageUp): "Page Up",
+        UInt32(kVK_PageDown): "Page Down",
+        UInt32(kVK_LeftArrow): "Left Arrow",
+        UInt32(kVK_RightArrow): "Right Arrow",
+        UInt32(kVK_UpArrow): "Up Arrow",
+        UInt32(kVK_DownArrow): "Down Arrow",
+        UInt32(kVK_F1): "F1",
+        UInt32(kVK_F2): "F2",
+        UInt32(kVK_F3): "F3",
+        UInt32(kVK_F4): "F4",
+        UInt32(kVK_F5): "F5",
+        UInt32(kVK_F6): "F6",
+        UInt32(kVK_F7): "F7",
+        UInt32(kVK_F8): "F8",
+        UInt32(kVK_F9): "F9",
+        UInt32(kVK_F10): "F10",
+        UInt32(kVK_F11): "F11",
+        UInt32(kVK_F12): "F12"
+    ]
 }
 
 enum AIProvider: String, CaseIterable, Identifiable {
@@ -1332,9 +1556,9 @@ enum AssistantWindowMode {
     var title: String {
         switch self {
         case .normal:
-            return "Context Discovery"
+            return "Context Translate POC"
         case .bubble:
-            return "Context"
+            return "Context Translate POC"
         }
     }
 
@@ -2158,6 +2382,42 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                warnings
+
+                settingsSection("App") {
+                    Toggle(
+                        "Show Translator in menu bar",
+                        isOn: Binding(
+                            get: { store.showsMenuBarItem },
+                            set: { store.setShowsMenuBarItem($0) }
+                        )
+                    )
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(store.shortcutRecordingStatus)
+                                .foregroundStyle(store.isRecordingShortcut ? .primary : .secondary)
+                            Spacer()
+                            if store.isRecordingShortcut {
+                                Button("Cancel") {
+                                    store.cancelShortcutRecording()
+                                }
+                            } else {
+                                Button("Record Shortcut") {
+                                    store.beginShortcutRecording()
+                                }
+                            }
+                        }
+
+                        Text("This shortcut opens the floating popover from the current selection.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .background(PrototypeSurface.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
                 settingsSection("Languages") {
                     Picker(
                         "Mine",
@@ -2190,6 +2450,28 @@ struct SettingsView: View {
             }
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var warnings: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !store.isAccessibilityGranted {
+                warningBox(
+                    title: "Accessibility is not granted",
+                    message: "Direct selected-text capture and selection-position popovers need Accessibility permission.",
+                    actionTitle: "Open Settings",
+                    action: store.openAccessibilitySettings
+                )
+            }
+
+            if let modelWarning = store.activeProviderConfigurationWarning {
+                warningBox(
+                    title: "No model configured",
+                    message: modelWarning,
+                    actionTitle: nil,
+                    action: nil
+                )
+            }
         }
     }
 
@@ -2351,6 +2633,33 @@ struct SettingsView: View {
                 .font(.headline)
             content()
         }
+    }
+
+    private func warningBox(
+        title: String,
+        message: String,
+        actionTitle: String?,
+        action: (() -> Void)?
+    ) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                Text(message)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.yellow.opacity(0.16))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var providerPrivacyMessage: String {
@@ -2648,15 +2957,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var hotKeyRef: EventHotKeyRef?
     private var hotKeyHandler: EventHandlerRef?
     private var bubbleLocalEventMonitor: Any?
+    private let firstLaunchCompletedKey = "ContextDiscovery.FirstLaunchCompleted"
 
     @MainActor
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let isFirstLaunch = !UserDefaults.standard.bool(forKey: firstLaunchCompletedKey)
         store = DiscoveryStore(capture: TextCaptureService.captureText())
+        store.menuBarVisibilityDidChange = { [weak self] isVisible in
+            Task { @MainActor in
+                self?.setMenuBarVisible(isVisible)
+            }
+        }
+        store.shortcutDidChange = { [weak self] _ in
+            self?.registerHotKey()
+        }
         setupApplicationMenu()
         NSApp.setActivationPolicy(.accessory)
-        setupMenuBar()
+        setMenuBarVisible(store.showsMenuBarItem)
         registerHotKey()
-        showAssistant(mode: .normal, recapture: false)
+        if isFirstLaunch {
+            UserDefaults.standard.set(true, forKey: firstLaunchCompletedKey)
+            showAssistant(mode: .normal, recapture: false, selectedTab: .settings)
+        } else {
+            showAssistant(mode: .normal, recapture: false)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -2702,7 +3026,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ","))
         appMenu.addItem(.separator())
-        appMenu.addItem(NSMenuItem(title: "Quit Context", action: #selector(quit), keyEquivalent: "q"))
+        appMenu.addItem(NSMenuItem(title: "Quit Context Translate POC", action: #selector(quit), keyEquivalent: "q"))
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
 
@@ -2723,9 +3047,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @MainActor
+    private func setMenuBarVisible(_ isVisible: Bool) {
+        if isVisible {
+            setupMenuBar()
+        } else if let statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+            self.statusItem = nil
+        }
+    }
+
+    @MainActor
     private func setupMenuBar() {
+        guard statusItem == nil else {
+            statusItem?.button?.title = "Translator"
+            return
+        }
+
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = "Context"
+        item.button?.title = "Translator"
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Open Assistant", action: #selector(openAssistant), keyEquivalent: "e"))
@@ -2929,14 +3268,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    @MainActor
     private func registerHotKey() {
+        if let hotKeyRef {
+            UnregisterEventHotKey(hotKeyRef)
+            self.hotKeyRef = nil
+        }
+
+        installHotKeyHandlerIfNeeded()
+
         let hotKeyID = EventHotKeyID(signature: "CTXT".fourCharCode, id: 1)
-        let modifiers = UInt32(cmdKey | optionKey)
-        let keyCode = UInt32(kVK_ANSI_E)
+        let shortcut = store.globalShortcut
 
         let status = RegisterEventHotKey(
-            keyCode,
-            modifiers,
+            shortcut.keyCode,
+            shortcut.modifiers,
             hotKeyID,
             GetApplicationEventTarget(),
             0,
@@ -2945,6 +3291,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         guard status == noErr else {
             NSLog("Context discovery hotkey registration failed: \(status)")
+            return
+        }
+    }
+
+    @MainActor
+    private func installHotKeyHandlerIfNeeded() {
+        guard hotKeyHandler == nil else {
             return
         }
 

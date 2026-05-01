@@ -38,11 +38,13 @@ swift run
 
 Expected behavior:
 
-- The app appears in the macOS menu bar.
+- On first launch, the app opens Settings.
+- The app appears in the macOS menu bar as `Translator`, unless disabled in Settings.
 - Choosing `Open Assistant` opens a floating assistant panel.
 - Pressing `Command+Option+E` opens a floating bubble near the current selection when possible.
 - The app tries Accessibility selection first, then temporary copy-restore, then clipboard fallback.
 - Settings are available from the app menu, the status menu, and `Command+,`.
+- Settings can record a different popover shortcut for this POC.
 
 ## Build Interim App Bundle
 
@@ -83,6 +85,7 @@ bash scripts/reset-settings.sh
 ```
 
 This clears the POC's known `UserDefaults` keys and removes the OpenRouter API key from macOS Keychain.
+It also resets first-launch onboarding, menu-bar visibility, and the recorded shortcut back to the default.
 
 ### Product Review Questions
 

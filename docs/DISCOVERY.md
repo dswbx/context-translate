@@ -225,6 +225,14 @@ Add entries in this format:
 **Recommendation:** Use `poc/scripts/package-app.sh` for lightweight sharing during discovery. Treat it as an interim local bundle, not a notarized distribution path.
 **Carry forward:** Yes.
 
+### 2026-05-01 - Setup Belongs In Settings First
+
+**Area:** onboarding
+**Observed:** First launch needs to expose missing Accessibility permission, missing model setup, menu-bar visibility, and the global shortcut before the user tries the capture flow.
+**Why it matters:** The assistant depends on macOS permissions and model/provider configuration. If those are invisible, the first run feels broken rather than merely unconfigured.
+**Recommendation:** Open Settings on first launch, show yellow setup warnings for missing Accessibility and model configuration, and keep trigger preferences visible there.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

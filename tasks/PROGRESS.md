@@ -316,3 +316,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift package clean`; `swift build`; `bash scripts/package-app.sh`; `test -x "poc/dist/Context Translate POC.app/Contents/MacOS/context-translate-poc"`; `plutil -lint "poc/dist/Context Translate POC.app/Contents/Info.plist"`; `codesign --verify --deep --strict "poc/dist/Context Translate POC.app"`
 **Decisions made:** Keep SwiftPM as the POC build source and use an ad-hoc signed local `.app` only as a convenience for sharing during discovery.
 **Next step:** Share the top-level `poc/` run instructions and the generated interim app bundle path with testers.
+
+## 2026-05-01 - Added Setup And Trigger Settings
+
+**Task:** TASK-003
+**Summary:** Renamed the app surfaces, opened Settings on first launch, added setup warnings, added menu-bar visibility control, and made the popover shortcut recordable.
+**Files changed:** `poc/Sources/ContextTranslateDiscovery/main.swift`, `poc/scripts/reset-settings.sh`, `poc/README.md`, `docs/DISCOVERY.md`, `tasks/CURRENT.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`; `bash scripts/package-app.sh`
+**Decisions made:** Keep setup concerns in Settings for the POC and default the global popover shortcut to `Command+Option+E`.
+**Next step:** Manually verify the first-launch Settings state after running `bash poc/scripts/reset-settings.sh`.
