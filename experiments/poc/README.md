@@ -63,6 +63,16 @@ bash scripts/dev-watch.sh
 
 The watcher polls `Package.swift` and `Sources/**/*.swift`, stops the running prototype, and starts `swift run` again when files change.
 
+## Reset Settings
+
+To simulate a first launch, quit the POC and run:
+
+```bash
+bash scripts/reset-settings.sh
+```
+
+This clears the POC's known `UserDefaults` keys and removes the OpenRouter API key from macOS Keychain.
+
 ### Product Review Questions
 
 - Does clipboard fallback feel acceptable for discovery?

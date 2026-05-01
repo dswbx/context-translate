@@ -298,3 +298,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Keep the app as a SwiftPM POC for now, but make it easy for others to run locally.
 **Next step:** Merge the POC branch into `main` so collaborators can pull and run it.
+
+## 2026-05-01 - Added POC Settings Reset Script
+
+**Task:** TASK-003
+**Summary:** Added a script to clear known POC UserDefaults keys and remove the OpenRouter Keychain item for first-launch testing.
+**Files changed:** `experiments/poc/scripts/reset-settings.sh`, `experiments/poc/README.md`, `tasks/PROGRESS.md`
+**Checks run:** `bash experiments/poc/scripts/reset-settings.sh`
+**Decisions made:** Delete only known POC keys across likely SwiftPM defaults domains instead of wiping entire domains.
+**Next step:** Use the reset script before product demos when first-launch behavior needs to be checked.
