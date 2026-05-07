@@ -370,3 +370,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`
 **Decisions made:** Apple Intelligence remains optional and readiness-gated. If it fails at request time, the POC shows the Apple-specific failure and does not silently fall back to Ollama or OpenRouter. The installed SDK does not expose `TranslationSession.Strategy.highFidelity`, so the spike uses the available Translation API and records that as a discovery finding.
 **Next step:** Run the POC, select Apple Intelligence in Settings, click Test Apple Intelligence, and manually verify Explain, selected-term detail, Composer, and Review if the readiness test passes.
+
+## 2026-05-07 - Clarified Apple Translation Language Installation
+
+**Task:** TASK-003
+**Summary:** Added explicit instructions for installing supported-but-missing Apple Translation languages in macOS System Settings.
+**Files changed:** `poc/Sources/ContextTranslateDiscovery/main.swift`, `poc/README.md`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`; `git diff --check`
+**Decisions made:** Keep the readiness behavior unchanged, but make the setup path visible in both the Apple provider status message and POC README.
+**Next step:** Re-run Test Apple Intelligence after downloading both translation languages from System Settings > General > Language & Region > Translation Languages.

@@ -75,6 +75,15 @@ OpenRouter sends selected text and prompts to OpenRouter and the selected upstre
 
 Apple Intelligence readiness checks both Foundation Models generation and Apple Translation with the current Mine/Theirs languages. If Apple Intelligence later becomes unavailable while selected, the POC shows the Apple-specific failure reason and does not silently fall back to Ollama or OpenRouter.
 
+If the readiness test says a language pair is supported but not installed, install both languages in macOS:
+
+1. Open **System Settings**.
+2. Go to **General > Language & Region**.
+3. Click **Translation Languages**.
+4. Click **Download** for both the source language and target language, for example English and German.
+5. Turn on **On-Device Mode** if you want macOS to process translations locally.
+6. Return to the POC and run **Test Apple Intelligence** again.
+
 ## Development Watch
 
 For a lightweight restart-on-change loop, run:

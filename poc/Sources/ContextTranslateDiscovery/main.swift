@@ -1015,7 +1015,7 @@ final class DiscoveryStore: ObservableObject {
         case .installed:
             return "Apple translation is installed for \(source.name) to \(target.name)."
         case .supported:
-            return "Apple translation supports \(source.name) to \(target.name), but the language pair is not installed yet."
+            return "Apple translation supports \(source.name) to \(target.name), but the language pair is not installed yet. Open System Settings > General > Language & Region > Translation Languages, download \(source.name) and \(target.name), then test again. Turn on On-Device Mode there if you want macOS to process translations locally."
         case .unsupported:
             return "Apple translation does not support \(source.name) to \(target.name) on this Mac."
         @unknown default:
@@ -3002,7 +3002,7 @@ struct SettingsView: View {
 
     private var appleIntelligenceSettings: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Apple Intelligence runs on this Mac when available. It needs supported hardware, enabled system settings, ready local models, and an installed translation language pair.")
+            Text("Apple Intelligence runs on this Mac when available. It needs supported hardware, enabled system settings, ready local models, and installed translation languages. To install languages, open System Settings > General > Language & Region > Translation Languages, then download both Mine and Theirs.")
                 .foregroundStyle(.secondary)
 
             HStack {
