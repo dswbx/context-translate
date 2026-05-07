@@ -609,18 +609,23 @@ final class DiscoveryStore: ObservableObject {
         You are helping a \(myLanguage.speakerDescription) professional understand \(theirLanguage.name).
         Explain the selected word in the exact sentence context.
         Return valid JSON only. No markdown. No code fences.
+        Language rules:
+        - contextTranslations must contain only natural \(myLanguage.name). Do not include \(theirLanguage.name) words unless they are names or untranslatable product terms from the original sentence.
+        - meaning, contextualMeaning, and tone must be written only in \(myLanguage.name).
+        - example must be written only in \(theirLanguage.name).
+        - Do not mix \(myLanguage.name) and \(theirLanguage.name) inside the same field.
 
         Required JSON shape:
         {
           "contextTranslations": [
-            "natural \(myLanguage.name) rendering of the selected word or phrase in this sentence",
-            "optional second alternative when it helps understanding",
-            "optional third alternative when it helps understanding"
+            "natural \(myLanguage.name)-only rendering of the selected word or phrase in this sentence",
+            "optional second \(myLanguage.name)-only alternative when it helps understanding",
+            "optional third \(myLanguage.name)-only alternative when it helps understanding"
           ],
-          "meaning": "short meaning in isolation",
-          "contextualMeaning": "meaning in this exact sentence",
-          "tone": "tone and formality guidance",
-          "example": "one natural \(theirLanguage.name) example sentence"
+          "meaning": "short \(myLanguage.name)-only meaning in isolation",
+          "contextualMeaning": "\(myLanguage.name)-only meaning in this exact sentence",
+          "tone": "\(myLanguage.name)-only tone and formality guidance",
+          "example": "one natural \(theirLanguage.name)-only example sentence"
         }
 
         Original sentence:
@@ -915,6 +920,7 @@ final class DiscoveryStore: ObservableObject {
         let session = LanguageModelSession(instructions: """
         You are the on-device Apple Intelligence provider for a language assistant prototype.
         Follow the user's requested output format exactly.
+        Follow every language constraint literally. If a field says it must be only one language, do not mix in another language.
         """)
         let response = try await session.respond(
             to: prompt,

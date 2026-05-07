@@ -379,3 +379,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`; `git diff --check`
 **Decisions made:** Keep the readiness behavior unchanged, but make the setup path visible in both the Apple provider status message and POC README.
 **Next step:** Re-run Test Apple Intelligence after downloading both translation languages from System Settings > General > Language & Region > Translation Languages.
+
+## 2026-05-07 - Tightened Apple Detail Prompt Language Boundaries
+
+**Task:** TASK-003
+**Summary:** Added explicit field-level language rules to the selected-term detail prompt so context translations stay in the user's native language and examples stay in the source language.
+**Files changed:** `poc/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`; `git diff --check`
+**Decisions made:** Treat mixed-language Apple detail output as a prompt-boundary issue. Use precise per-field language constraints rather than post-processing generated text.
+**Next step:** Re-test Apple Intelligence selected-term detail with Mine set to German and Theirs set to English; confirm Context translate contains German only.

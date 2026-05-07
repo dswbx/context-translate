@@ -265,6 +265,14 @@ Add entries in this format:
 **Recommendation:** Keep Apple Intelligence as an optional discovery provider. Gate it behind a Settings test that performs a small Foundation Models JSON generation and a small Apple Translation request for the selected language pair. If Apple later fails at request time, show the Apple-specific reason and do not silently fall back to another provider. When the language pair is supported but not installed, point the user to System Settings > General > Language & Region > Translation Languages.
 **Carry forward:** Yes.
 
+### 2026-05-07 - Apple Foundation Models Need Explicit Language Boundaries
+
+**Area:** AI
+**Observed:** Apple Intelligence could return selected-term context translations that mixed English and German when the prompt only implied that `contextTranslations` should be in the user's native language.
+**Why it matters:** The Explain detail pane needs a dependable target-language anchor before meaning details. Mixed-language selected-term translations make the app feel unreliable for the core use case.
+**Recommendation:** Provider prompts should state field-level language rules explicitly: context translations, meaning, contextual meaning, and tone in the user's native language only; examples in the source/target English language only; no mixed-language fields.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:
