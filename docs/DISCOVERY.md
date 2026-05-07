@@ -270,7 +270,7 @@ Add entries in this format:
 **Area:** AI
 **Observed:** Apple Intelligence could return selected-term context translations that mixed English and German when the prompt only implied that `contextTranslations` should be in the user's native language.
 **Why it matters:** The Explain detail pane needs a dependable target-language anchor before meaning details. Mixed-language selected-term translations make the app feel unreliable for the core use case.
-**Recommendation:** Provider prompts should state field-level language rules explicitly: context translations, meaning, contextual meaning, and tone in the user's native language only; examples in the source/target English language only; no mixed-language fields.
+**Recommendation:** Provider prompts should state field-level language rules explicitly: context translations in the user's native language only; meaning, contextual meaning, tone, and examples in the source language only; no mixed-language fields.
 **Carry forward:** Yes.
 
 ## Extraction Checklist

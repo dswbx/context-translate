@@ -388,3 +388,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`; `git diff --check`
 **Decisions made:** Treat mixed-language Apple detail output as a prompt-boundary issue. Use precise per-field language constraints rather than post-processing generated text.
 **Next step:** Re-test Apple Intelligence selected-term detail with Mine set to German and Theirs set to English; confirm Context translate contains German only.
+
+## 2026-05-07 - Corrected Explain Detail Language Contract
+
+**Task:** TASK-003
+**Summary:** Corrected the selected-term detail prompt so only Context translate uses the user's native language; Meaning, In this context, Tone, and Example stay in the source language.
+**Files changed:** `poc/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`; `git diff --check`
+**Decisions made:** Context translate is the native-language anchor. The rest of the explanation should remain in the source language so the user learns how the English term works.
+**Next step:** Re-test Apple Intelligence selected-term detail with Mine set to German and Theirs set to English; confirm only Context translate is German.

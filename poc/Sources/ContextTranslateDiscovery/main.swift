@@ -611,7 +611,7 @@ final class DiscoveryStore: ObservableObject {
         Return valid JSON only. No markdown. No code fences.
         Language rules:
         - contextTranslations must contain only natural \(myLanguage.name). Do not include \(theirLanguage.name) words unless they are names or untranslatable product terms from the original sentence.
-        - meaning, contextualMeaning, and tone must be written only in \(myLanguage.name).
+        - meaning, contextualMeaning, and tone must be written only in \(theirLanguage.name).
         - example must be written only in \(theirLanguage.name).
         - Do not mix \(myLanguage.name) and \(theirLanguage.name) inside the same field.
 
@@ -622,9 +622,9 @@ final class DiscoveryStore: ObservableObject {
             "optional second \(myLanguage.name)-only alternative when it helps understanding",
             "optional third \(myLanguage.name)-only alternative when it helps understanding"
           ],
-          "meaning": "short \(myLanguage.name)-only meaning in isolation",
-          "contextualMeaning": "\(myLanguage.name)-only meaning in this exact sentence",
-          "tone": "\(myLanguage.name)-only tone and formality guidance",
+          "meaning": "short \(theirLanguage.name)-only meaning in isolation",
+          "contextualMeaning": "\(theirLanguage.name)-only meaning in this exact sentence",
+          "tone": "\(theirLanguage.name)-only tone and formality guidance",
           "example": "one natural \(theirLanguage.name)-only example sentence"
         }
 
