@@ -69,8 +69,11 @@ The POC supports:
 
 - **Ollama:** default, local provider. Install/run a model in Ollama, then refresh models in Settings.
 - **OpenRouter:** optional cloud provider. Add an API key in Settings. The key is stored in macOS Keychain.
+- **Apple Intelligence:** optional on-device provider. Select it in Settings, run **Test Apple Intelligence**, and use it only after the readiness test passes.
 
-OpenRouter sends selected text and prompts to OpenRouter and the selected upstream model provider. Ollama keeps model calls local.
+OpenRouter sends selected text and prompts to OpenRouter and the selected upstream model provider. Ollama keeps model calls local. Apple Intelligence uses Apple on-device generation when this Mac is eligible, Apple Intelligence is enabled, local models are ready, and the selected translation language pair is installed.
+
+Apple Intelligence readiness checks both Foundation Models generation and Apple Translation with the current Mine/Theirs languages. If Apple Intelligence later becomes unavailable while selected, the POC shows the Apple-specific failure reason and does not silently fall back to Ollama or OpenRouter.
 
 ## Development Watch
 

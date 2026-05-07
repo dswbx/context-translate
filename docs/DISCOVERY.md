@@ -257,6 +257,14 @@ Add entries in this format:
 **Recommendation:** Keep `Command+Q` as quit and use `Command+W` only to close the active assistant window or currently visible assistant surface.
 **Carry forward:** Yes.
 
+### 2026-05-07 - Apple Intelligence Needs A Readiness Gate
+
+**Area:** AI
+**Observed:** Apple Intelligence can be exposed as a third POC provider beside Ollama and OpenRouter, but it has runtime prerequisites that are different from both: eligible Mac, enabled Apple Intelligence, ready local Foundation Models assets, supported languages, and installed Apple Translation language pairs. The installed SDK exposes Foundation Models and Translation, but does not expose the documented `TranslationSession.Strategy.highFidelity` API.
+**Why it matters:** Apple Intelligence is attractive as a privacy-first provider, but it cannot be treated like a saved API key or a manually selected Ollama model. The app must prove readiness before routing user text through it, and it must explain setup failures clearly.
+**Recommendation:** Keep Apple Intelligence as an optional discovery provider. Gate it behind a Settings test that performs a small Foundation Models JSON generation and a small Apple Translation request for the selected language pair. If Apple later fails at request time, show the Apple-specific reason and do not silently fall back to another provider.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

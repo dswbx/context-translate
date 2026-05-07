@@ -4,6 +4,12 @@ import Carbon
 import Foundation
 import Security
 import SwiftUI
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
+#if canImport(Translation)
+import Translation
+#endif
 
 @MainActor
 final class DiscoveryStore: ObservableObject {
@@ -31,9 +37,12 @@ final class DiscoveryStore: ObservableObject {
     @Published var theirLanguage: LanguageOption
     @Published var ollamaStatusMessage: String
     @Published var openRouterStatusMessage: String
+    @Published var appleIntelligenceStatusMessage: String
     @Published var hasOpenRouterAPIKey: Bool
     @Published var isCheckingOllama: Bool
     @Published var isTestingOpenRouter: Bool
+    @Published var isTestingAppleIntelligence: Bool
+    @Published var appleIntelligenceReadiness: AppleIntelligenceReadiness
     @Published var isGeneratingTranslation: Bool
     @Published var isGeneratingDetail: Bool
     @Published var isGeneratingComposer: Bool
@@ -71,6 +80,7 @@ final class DiscoveryStore: ObservableObject {
         let savedMyLanguage = LanguageOption.savedValue(forKey: myLanguageKey, fallback: .german)
         let savedTheirLanguage = LanguageOption.savedValue(forKey: theirLanguageKey, fallback: .english)
         let savedProvider = AIProvider.savedValue(forKey: selectedProviderKey, fallback: .ollama)
+        let initialProvider = savedProvider
         let hasOpenRouterKey = UserDefaults.standard.bool(forKey: openRouterHasAPIKeyKey)
         let savedShowsMenuBarItem = UserDefaults.standard.object(forKey: showsMenuBarItemKey) as? Bool ?? true
         let savedShortcut = GlobalShortcut.savedValue(
@@ -96,16 +106,19 @@ final class DiscoveryStore: ObservableObject {
         self.reviewStatusMessage = "Write a \(savedTheirLanguage.name) sentence to review."
         self.germanTranslation = ""
         self.translationStatusMessage = "Choose a local Ollama model to translate."
-        self.selectedProvider = savedProvider
+        self.selectedProvider = initialProvider
         self.ollamaModels = []
         self.selectedOllamaModel = UserDefaults.standard.string(forKey: selectedModelKey) ?? ""
         self.selectedOpenRouterModel = UserDefaults.standard.string(forKey: selectedOpenRouterModelKey) ?? "openrouter/auto"
         self.openRouterAPIKeyInput = ""
         self.ollamaStatusMessage = "Ollama has not been checked yet."
         self.openRouterStatusMessage = hasOpenRouterKey ? "OpenRouter API key is stored in Keychain." : "Add an OpenRouter API key to use cloud models."
+        self.appleIntelligenceStatusMessage = "Test Apple Intelligence before turning it on."
         self.hasOpenRouterAPIKey = hasOpenRouterKey
         self.isCheckingOllama = false
         self.isTestingOpenRouter = false
+        self.isTestingAppleIntelligence = false
+        self.appleIntelligenceReadiness = .unknown
         self.isGeneratingTranslation = false
         self.isGeneratingDetail = false
         self.isGeneratingComposer = false
@@ -115,7 +128,7 @@ final class DiscoveryStore: ObservableObject {
         self.showsMenuBarItem = savedShowsMenuBarItem
         self.globalShortcut = savedShortcut
         self.isRecordingShortcut = false
-        self.translationStatusMessage = providerReadyMessage(for: savedProvider)
+        self.translationStatusMessage = providerReadyMessage(for: initialProvider)
     }
 
     var translatedText: String {
@@ -272,6 +285,11 @@ final class DiscoveryStore: ObservableObject {
             regenerateAIResponses()
         } else {
             stopAIResponses()
+            if provider == .appleIntelligence {
+                germanTranslation = ""
+                selectedPhrase = nil
+                detailStatusMessage = selectedWordText == nil ? "Click a word to explain it." : providerMissingConfigurationMessage(for: provider, action: "explain this word")
+            }
         }
     }
 
@@ -391,9 +409,37 @@ final class DiscoveryStore: ObservableObject {
         }
     }
 
+    func testAppleIntelligence() async {
+        isTestingAppleIntelligence = true
+        appleIntelligenceReadiness = .checking
+        appleIntelligenceStatusMessage = appleIntelligenceReadiness.message
+        defer { isTestingAppleIntelligence = false }
+
+        do {
+            try await checkAppleIntelligenceReadiness()
+            appleIntelligenceReadiness = .ready
+            appleIntelligenceStatusMessage = appleIntelligenceReadiness.message
+            if selectedProvider == .appleIntelligence {
+                translationStatusMessage = providerReadyMessage(for: .appleIntelligence)
+                regenerateAIResponses()
+            }
+        } catch {
+            let message = appleIntelligenceFailureMessage(from: error)
+            appleIntelligenceReadiness = .unavailable(message)
+            appleIntelligenceStatusMessage = message
+            if selectedProvider == .appleIntelligence {
+                stopAIResponses()
+                germanTranslation = ""
+                translationStatusMessage = providerReadyMessage(for: .appleIntelligence)
+                detailStatusMessage = selectedWordText == nil ? "Click a word to explain it." : providerMissingConfigurationMessage(for: .appleIntelligence, action: "explain this word")
+            }
+        }
+    }
+
     func selectMyLanguage(_ language: LanguageOption) {
         myLanguage = language
         UserDefaults.standard.set(language.rawValue, forKey: myLanguageKey)
+        resetAppleIntelligenceReadinessForLanguageChange()
         translationStatusMessage = providerReadyMessage(for: selectedProvider)
         if isActiveProviderConfigured {
             regenerateAIResponses()
@@ -403,6 +449,7 @@ final class DiscoveryStore: ObservableObject {
     func selectTheirLanguage(_ language: LanguageOption) {
         theirLanguage = language
         UserDefaults.standard.set(language.rawValue, forKey: theirLanguageKey)
+        resetAppleIntelligenceReadinessForLanguageChange()
         reviewStatusMessage = "Write a \(language.name) sentence to review."
         translationStatusMessage = providerReadyMessage(for: selectedProvider)
         if isActiveProviderConfigured {
@@ -533,7 +580,12 @@ final class DiscoveryStore: ObservableObject {
 
         translationTask = Task {
             do {
-                let response = try await askActiveProvider(prompt: prompt)
+                let response: String
+                if selectedProvider == .appleIntelligence {
+                    response = try await translateWithAppleIntelligence(capturedText)
+                } else {
+                    response = try await askActiveProvider(prompt: prompt)
+                }
                 guard !Task.isCancelled else { return }
                 germanTranslation = response
                 translationStatusMessage = "Translated with \(activeModelDisplayName)."
@@ -698,6 +750,8 @@ final class DiscoveryStore: ObservableObject {
             return selectedOllamaModel
         case .openRouter:
             return "OpenRouter: \(selectedOpenRouterModelText)"
+        case .appleIntelligence:
+            return "Apple Intelligence"
         }
     }
 
@@ -707,6 +761,8 @@ final class DiscoveryStore: ObservableObject {
             return "Could not reach Ollama. Check that the local server is running."
         case .openRouter:
             return "OpenRouter request failed. Check the API key, model ID, and account credits."
+        case .appleIntelligence:
+            return appleIntelligenceStatusMessage
         }
     }
 
@@ -716,6 +772,8 @@ final class DiscoveryStore: ObservableObject {
             return !selectedOllamaModel.isEmpty
         case .openRouter:
             return hasOpenRouterAPIKey && !selectedOpenRouterModelText.isEmpty
+        case .appleIntelligence:
+            return appleIntelligenceReadiness.isReady
         }
     }
 
@@ -729,6 +787,8 @@ final class DiscoveryStore: ObservableObject {
             return "Ready to translate with \(selectedOllamaModel)."
         case .openRouter:
             return "Ready to translate with OpenRouter: \(selectedOpenRouterModelText)."
+        case .appleIntelligence:
+            return "Ready to translate with Apple Intelligence."
         }
     }
 
@@ -741,6 +801,8 @@ final class DiscoveryStore: ObservableObject {
                 return "Add an OpenRouter API key to \(action)."
             }
             return "Enter an OpenRouter model ID to \(action)."
+        case .appleIntelligence:
+            return appleIntelligenceReadiness.isReady ? "Apple Intelligence is ready to \(action)." : appleIntelligenceReadiness.message
         }
     }
 
@@ -750,6 +812,8 @@ final class DiscoveryStore: ObservableObject {
             return try await askOllama(prompt: prompt)
         case .openRouter:
             return try await askOpenRouter(prompt: prompt)
+        case .appleIntelligence:
+            return try await askAppleFoundationModel(prompt: prompt)
         }
     }
 
@@ -822,6 +886,159 @@ final class DiscoveryStore: ObservableObject {
 
         return content
     }
+
+    private func checkAppleIntelligenceReadiness() async throws {
+        try Task.checkCancellation()
+        try await verifyAppleFoundationModelReady()
+        try Task.checkCancellation()
+        let generationProbe = try await askAppleFoundationModel(prompt: """
+        Return valid JSON only. No markdown.
+        Required JSON shape:
+        {"status":"OK"}
+        """)
+        guard AppleReadinessProbe.fromModelResponse(generationProbe)?.status.uppercased() == "OK" else {
+            throw AppleIntelligenceProviderError("Apple Intelligence responded, but the readiness JSON test did not parse.")
+        }
+        try Task.checkCancellation()
+        _ = try await translateWithAppleIntelligence("Hello.")
+    }
+
+    private func askAppleFoundationModel(prompt: String) async throws -> String {
+#if canImport(FoundationModels)
+        guard #available(macOS 26.0, *) else {
+            throw AppleIntelligenceProviderError("Apple Intelligence generation requires macOS 26 or later in this POC.")
+        }
+
+        try await verifyAppleFoundationModelReady()
+        try Task.checkCancellation()
+
+        let session = LanguageModelSession(instructions: """
+        You are the on-device Apple Intelligence provider for a language assistant prototype.
+        Follow the user's requested output format exactly.
+        """)
+        let response = try await session.respond(
+            to: prompt,
+            options: GenerationOptions(temperature: 0.2, maximumResponseTokens: 700)
+        )
+        try Task.checkCancellation()
+        let content = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else {
+            throw AppleIntelligenceProviderError("Apple Intelligence returned an empty response.")
+        }
+
+        return content
+#else
+        throw AppleIntelligenceProviderError("Apple Intelligence generation APIs are not available in this SDK.")
+#endif
+    }
+
+    private func translateWithAppleIntelligence(_ text: String) async throws -> String {
+#if canImport(Translation)
+        guard #available(macOS 26.0, *) else {
+            throw AppleIntelligenceProviderError("Apple translation requires macOS 26 or later in this POC.")
+        }
+
+        try Task.checkCancellation()
+        let source = theirLanguage.localeLanguage
+        let target = myLanguage.localeLanguage
+        let languageAvailability = LanguageAvailability()
+        let status = await languageAvailability.status(from: source, to: target)
+        guard status == .installed else {
+            throw AppleIntelligenceProviderError(appleTranslationStatusMessage(status, source: theirLanguage, target: myLanguage))
+        }
+
+        let session = TranslationSession(installedSource: source, target: target)
+        let response = try await session.translate(text)
+        try Task.checkCancellation()
+        let translated = response.targetText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !translated.isEmpty else {
+            throw AppleIntelligenceProviderError("Apple translation returned an empty response.")
+        }
+
+        return translated
+#else
+        throw AppleIntelligenceProviderError("Apple translation APIs are not available in this SDK.")
+#endif
+    }
+
+    private func verifyAppleFoundationModelReady() async throws {
+#if canImport(FoundationModels)
+        guard #available(macOS 26.0, *) else {
+            throw AppleIntelligenceProviderError("Apple Intelligence generation requires macOS 26 or later in this POC.")
+        }
+
+        let model = SystemLanguageModel.default
+        switch model.availability {
+        case .available:
+            break
+        case .unavailable(let reason):
+            throw AppleIntelligenceProviderError(appleFoundationModelUnavailableMessage(reason))
+        @unknown default:
+            throw AppleIntelligenceProviderError("Apple Intelligence availability is unknown on this Mac.")
+        }
+
+        guard model.supportsLocale(Locale(identifier: myLanguage.localeIdentifier)),
+              model.supportsLocale(Locale(identifier: theirLanguage.localeIdentifier)) else {
+            throw AppleIntelligenceProviderError("Apple Intelligence does not support \(myLanguage.name) and \(theirLanguage.name) on this Mac.")
+        }
+#else
+        throw AppleIntelligenceProviderError("Apple Intelligence generation APIs are not available in this SDK.")
+#endif
+    }
+
+    private func resetAppleIntelligenceReadinessForLanguageChange() {
+        guard appleIntelligenceReadiness.isReady else {
+            return
+        }
+
+        appleIntelligenceReadiness = .unknown
+        appleIntelligenceStatusMessage = "Language changed. Test Apple Intelligence again before using it."
+        if selectedProvider == .appleIntelligence {
+            stopAIResponses()
+            selectedProvider = .ollama
+            UserDefaults.standard.set(AIProvider.ollama.rawValue, forKey: selectedProviderKey)
+        }
+    }
+
+    private func appleIntelligenceFailureMessage(from error: Error) -> String {
+        if let providerError = error as? AppleIntelligenceProviderError {
+            return providerError.message
+        }
+
+        return "Apple Intelligence test failed: \(error.localizedDescription)"
+    }
+
+#if canImport(Translation)
+    @available(macOS 15.0, *)
+    private func appleTranslationStatusMessage(_ status: LanguageAvailability.Status, source: LanguageOption, target: LanguageOption) -> String {
+        switch status {
+        case .installed:
+            return "Apple translation is installed for \(source.name) to \(target.name)."
+        case .supported:
+            return "Apple translation supports \(source.name) to \(target.name), but the language pair is not installed yet."
+        case .unsupported:
+            return "Apple translation does not support \(source.name) to \(target.name) on this Mac."
+        @unknown default:
+            return "Apple translation availability is unknown for \(source.name) to \(target.name)."
+        }
+    }
+#endif
+
+#if canImport(FoundationModels)
+    @available(macOS 26.0, *)
+    private func appleFoundationModelUnavailableMessage(_ reason: SystemLanguageModel.Availability.UnavailableReason) -> String {
+        switch reason {
+        case .deviceNotEligible:
+            return "This Mac is not eligible for Apple Intelligence."
+        case .appleIntelligenceNotEnabled:
+            return "Apple Intelligence is not enabled in System Settings."
+        case .modelNotReady:
+            return "Apple Intelligence is not ready yet. The local model may still be downloading."
+        @unknown default:
+            return "Apple Intelligence is unavailable for an unknown reason."
+        }
+    }
+#endif
 
     private func openRouterAPIKey() -> String? {
         if let cachedOpenRouterAPIKey {
@@ -926,6 +1143,22 @@ enum LanguageOption: String, CaseIterable, Identifiable {
         case .portuguese: return "Portuguese-speaking"
         case .dutch: return "Dutch-speaking"
         }
+    }
+
+    var localeIdentifier: String {
+        switch self {
+        case .english: return "en"
+        case .german: return "de"
+        case .french: return "fr"
+        case .spanish: return "es"
+        case .italian: return "it"
+        case .portuguese: return "pt"
+        case .dutch: return "nl"
+        }
+    }
+
+    var localeLanguage: Locale.Language {
+        Locale.Language(identifier: localeIdentifier)
     }
 
     static func savedValue(forKey key: String, fallback: LanguageOption) -> LanguageOption {
@@ -1073,6 +1306,7 @@ struct GlobalShortcut: Equatable {
 enum AIProvider: String, CaseIterable, Identifiable {
     case ollama
     case openRouter
+    case appleIntelligence
 
     var id: String { rawValue }
 
@@ -1082,6 +1316,8 @@ enum AIProvider: String, CaseIterable, Identifiable {
             return "Ollama"
         case .openRouter:
             return "OpenRouter"
+        case .appleIntelligence:
+            return "Apple Intelligence"
         }
     }
 
@@ -1092,6 +1328,64 @@ enum AIProvider: String, CaseIterable, Identifiable {
         }
 
         return provider
+    }
+}
+
+enum AppleIntelligenceReadiness: Equatable {
+    case unknown
+    case checking
+    case ready
+    case unavailable(String)
+
+    var isReady: Bool {
+        if case .ready = self {
+            return true
+        }
+
+        return false
+    }
+
+    var message: String {
+        switch self {
+        case .unknown:
+            return "Test Apple Intelligence before turning it on."
+        case .checking:
+            return "Testing Apple Intelligence..."
+        case .ready:
+            return "Apple Intelligence is ready for this language pair."
+        case .unavailable(let reason):
+            return reason
+        }
+    }
+}
+
+struct AppleIntelligenceProviderError: LocalizedError {
+    let message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
+
+    var errorDescription: String? {
+        message
+    }
+}
+
+struct AppleReadinessProbe: Decodable {
+    let status: String
+
+    static func fromModelResponse(_ response: String) -> AppleReadinessProbe? {
+        let jsonText = response
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let data = jsonText.data(using: .utf8) else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode(AppleReadinessProbe.self, from: data)
     }
 }
 
@@ -2546,7 +2840,7 @@ struct SettingsView: View {
 
             if let modelWarning = store.activeProviderConfigurationWarning {
                 warningBox(
-                    title: "No model configured",
+                    title: store.selectedProvider == .appleIntelligence ? "Apple Intelligence is not ready" : "No model configured",
                     message: modelWarning,
                     actionTitle: nil,
                     action: nil
@@ -2580,6 +2874,8 @@ struct SettingsView: View {
                 ollamaSettings
             case .openRouter:
                 openRouterSettings
+            case .appleIntelligence:
+                appleIntelligenceSettings
             }
         }
     }
@@ -2704,6 +3000,45 @@ struct SettingsView: View {
         }
     }
 
+    private var appleIntelligenceSettings: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Apple Intelligence runs on this Mac when available. It needs supported hardware, enabled system settings, ready local models, and an installed translation language pair.")
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Text(store.appleIntelligenceStatusMessage)
+                    .font(.callout)
+                    .foregroundStyle(store.appleIntelligenceReadiness.isReady ? .primary : .secondary)
+                Spacer()
+                if store.isTestingAppleIntelligence {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Button("Test Apple Intelligence") {
+                        Task {
+                            await store.testAppleIntelligence()
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PrototypeSurface.background)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            if store.appleIntelligenceReadiness.isReady {
+                Text("Apple Intelligence can now be used for Explain, Composer, and Review.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Apple Intelligence cannot generate responses until this test passes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+
     private func settingsSection<Content: View>(
         _ title: String,
         @ViewBuilder content: () -> Content
@@ -2748,6 +3083,8 @@ struct SettingsView: View {
             return "Ollama keeps model calls local on this Mac."
         case .openRouter:
             return "OpenRouter uses cloud models. Selected text and prompts leave this Mac."
+        case .appleIntelligence:
+            return "Apple Intelligence uses Apple on-device features when this Mac is eligible and ready."
         }
     }
 }

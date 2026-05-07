@@ -361,3 +361,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`; `git diff --check`
 **Decisions made:** Keep the provider response as structured alternatives, but render them inline for a denser detail pane.
 **Next step:** Manually check that long alternatives wrap cleanly in the Explain detail pane.
+
+## 2026-05-07 - Added Apple Intelligence Provider Spike
+
+**Task:** TASK-003
+**Summary:** Added Apple Intelligence as a third POC provider beside Ollama and OpenRouter, with Settings readiness testing for Foundation Models generation and Apple Translation before responses can be generated.
+**Files changed:** `poc/Sources/ContextTranslateDiscovery/main.swift`, `poc/README.md`, `docs/TERMINOLOGY.md`, `docs/DISCOVERY.md`, `tasks/PROGRESS.md`, `tasks/CURRENT.md`
+**Checks run:** `swift build`
+**Decisions made:** Apple Intelligence remains optional and readiness-gated. If it fails at request time, the POC shows the Apple-specific failure and does not silently fall back to Ollama or OpenRouter. The installed SDK does not expose `TranslationSession.Strategy.highFidelity`, so the spike uses the available Translation API and records that as a discovery finding.
+**Next step:** Run the POC, select Apple Intelligence in Settings, click Test Apple Intelligence, and manually verify Explain, selected-term detail, Composer, and Review if the readiness test passes.

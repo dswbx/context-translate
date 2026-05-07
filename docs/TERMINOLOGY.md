@@ -136,6 +136,10 @@ An AI model running on the user's machine. In discovery, this means an Ollama mo
 
 The first discovery-phase local AI provider. The prototype checks `http://localhost:11434/api/tags` for local models and uses `POST /api/generate` for responses.
 
+### Apple Intelligence
+
+An optional discovery-phase on-device AI provider. The prototype must test local availability before use because Apple Intelligence depends on Mac eligibility, system settings, local model readiness, and supported language pairs.
+
 ### Stub Response
 
 A deterministic fake response used when no real AI provider is configured or reachable.
