@@ -560,6 +560,11 @@ final class DiscoveryStore: ObservableObject {
 
         Required JSON shape:
         {
+          "contextTranslations": [
+            "natural \(myLanguage.name) rendering of the selected word or phrase in this sentence",
+            "optional second alternative when it helps understanding",
+            "optional third alternative when it helps understanding"
+          ],
           "meaning": "short meaning in isolation",
           "contextualMeaning": "meaning in this exact sentence",
           "tone": "tone and formality guidance",
@@ -1197,10 +1202,37 @@ enum KeychainPasswordStore {
 }
 
 struct AIWordExplanation: Decodable {
+    let contextTranslations: [String]
     let meaning: String
     let contextualMeaning: String
     let tone: String
     let example: String
+
+    enum CodingKeys: String, CodingKey {
+        case contextTranslations
+        case translation
+        case meaning
+        case contextualMeaning
+        case tone
+        case example
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        if let translations = try? container.decode([String].self, forKey: .contextTranslations) {
+            self.contextTranslations = translations.cleanedContextTranslations
+        } else if let legacyTranslation = try? container.decode(String.self, forKey: .translation) {
+            self.contextTranslations = [legacyTranslation].cleanedContextTranslations
+        } else {
+            self.contextTranslations = []
+        }
+
+        self.meaning = try container.decode(String.self, forKey: .meaning)
+        self.contextualMeaning = try container.decode(String.self, forKey: .contextualMeaning)
+        self.tone = try container.decode(String.self, forKey: .tone)
+        self.example = try container.decode(String.self, forKey: .example)
+    }
 }
 
 struct AIComposerOutput: Decodable {
@@ -1322,6 +1354,7 @@ struct ReviewFeedback: Equatable {
 struct PhraseExplanation: Identifiable, Equatable {
     let id = UUID()
     let phrase: String
+    let contextTranslations: [String]
     let meaning: String
     let contextualMeaning: String
     let tone: String
@@ -1330,6 +1363,10 @@ struct PhraseExplanation: Identifiable, Equatable {
     static let sampleLearningItem =
         PhraseExplanation(
             phrase: "on the same page",
+            contextTranslations: [
+                "auf dem gleichen Stand sein",
+                "dasselbe Verständnis haben"
+            ],
             meaning: "Sharing the same understanding.",
             contextualMeaning: "The speaker wants alignment before moving forward.",
             tone: "Friendly and professional.",
@@ -1339,6 +1376,11 @@ struct PhraseExplanation: Identifiable, Equatable {
     static let samplePhrases = [
         PhraseExplanation(
             phrase: "blocker",
+            contextTranslations: [
+                "etwas, das uns aufhält",
+                "ein Problem, das erst gelöst werden muss",
+                "Hindernis"
+            ],
             meaning: "Something that prevents progress.",
             contextualMeaning: "The issue needs attention before work can continue.",
             tone: "Direct, common in technical teams.",
@@ -1357,6 +1399,7 @@ struct PhraseExplanation: Identifiable, Equatable {
            let decoded = try? JSONDecoder().decode(AIWordExplanation.self, from: data) {
             return PhraseExplanation(
                 phrase: fallbackWord,
+                contextTranslations: decoded.contextTranslations,
                 meaning: decoded.meaning,
                 contextualMeaning: decoded.contextualMeaning,
                 tone: decoded.tone,
@@ -1366,6 +1409,7 @@ struct PhraseExplanation: Identifiable, Equatable {
 
         return PhraseExplanation(
             phrase: fallbackWord,
+            contextTranslations: [],
             meaning: trimmed,
             contextualMeaning: "The local model returned an unstructured response.",
             tone: "Ask again or try a stronger local model for cleaner structure.",
@@ -1405,6 +1449,17 @@ struct ComposerOutputs {
             casual: trimmed,
             neutral: "The local model returned an unstructured response.",
             professional: "Ask again or try a stronger local model for cleaner structure."
+        )
+    }
+}
+
+private extension Array where Element == String {
+    var cleanedContextTranslations: [String] {
+        Array(
+            self
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .prefix(3)
         )
     }
 }
@@ -2047,6 +2102,10 @@ struct PhraseDetailView: View {
                         }
                     }
 
+                    contextTranslationsDetail(
+                        store.selectedPhrase?.contextTranslations ?? [],
+                        isPlaceholder: store.selectedPhrase == nil
+                    )
                     detail("Meaning", store.selectedPhrase?.meaning ?? placeholderText, isPlaceholder: store.selectedPhrase == nil)
                     detail("In this context", store.selectedPhrase?.contextualMeaning ?? placeholderText, isPlaceholder: store.selectedPhrase == nil)
                     detail("Tone", store.selectedPhrase?.tone ?? placeholderText, isPlaceholder: store.selectedPhrase == nil)
@@ -2093,6 +2152,27 @@ struct PhraseDetailView: View {
             Text(value)
                 .foregroundStyle(isPlaceholder ? Color.secondary.opacity(0.65) : Color.primary)
                 .textSelection(.enabled)
+        }
+    }
+
+    private func contextTranslationsDetail(_ translations: [String], isPlaceholder: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Context translation")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if isPlaceholder {
+                Text(placeholderText)
+                    .foregroundStyle(Color.secondary.opacity(0.65))
+                    .textSelection(.enabled)
+            } else if translations.isEmpty {
+                Text("No context translation returned.")
+                    .foregroundStyle(Color.secondary.opacity(0.65))
+                    .textSelection(.enabled)
+            } else {
+                Text(translations.prefix(3).joined(separator: ", "))
+                    .textSelection(.enabled)
+            }
         }
     }
 }
@@ -3030,6 +3110,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
 
+        let fileMenuItem = NSMenuItem()
+        let fileMenu = NSMenu(title: "File")
+        let closeWindowItem = NSMenuItem(title: "Close Window", action: #selector(closeActiveAssistantWindow), keyEquivalent: "w")
+        closeWindowItem.target = self
+        fileMenu.addItem(closeWindowItem)
+        fileMenuItem.submenu = fileMenu
+        mainMenu.addItem(fileMenuItem)
+
         let editMenuItem = NSMenuItem()
         let editMenu = NSMenu(title: "Edit")
         editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
@@ -3094,6 +3182,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    @MainActor
+    @objc private func closeActiveAssistantWindow() {
+        if let keyWindow = NSApp.keyWindow as? NSPanel,
+           keyWindow === normalPanel || keyWindow === bubblePanel {
+            keyWindow.close()
+            return
+        }
+
+        if let normalPanel, normalPanel.isVisible {
+            normalPanel.close()
+            return
+        }
+
+        closeBubblePanel()
     }
 
     @MainActor
@@ -3343,6 +3447,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 }
 
 private extension String {
+    var nonEmpty: String? {
+        isEmpty ? nil : self
+    }
+
     var fourCharCode: FourCharCode {
         var result: FourCharCode = 0
         for scalar in unicodeScalars.prefix(4) {

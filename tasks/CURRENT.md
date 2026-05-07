@@ -12,7 +12,7 @@ Test the runnable Swift/SwiftUI discovery prototype and record what feels right 
 
 ## Immediate Next Step
 
-Have the product owner try the running prototype from the menu bar, clipboard fallback, hotkey, explanation, composer, and review screens.
+Manually verify `Command+W` closes the normal and bubble assistant windows without quitting the menu-bar app, then test that the Explain detail pane shows 1-3 context-driven translation alternatives before Meaning.
 
 ## Blockers
 
@@ -24,4 +24,4 @@ The POC builds and runs via `swift run` in `poc/`. It should stay disposable by 
 
 ## Handoff Notes
 
-Verify the first-launch Settings flow, menu-bar visibility toggle, Accessibility/model warnings, and recorded shortcut behavior in the running POC.
+Verify the first-launch Settings flow, menu-bar visibility toggle, Accessibility/model warnings, recorded shortcut behavior, `Command+W` close behavior, and selected-term context translations in the running POC.

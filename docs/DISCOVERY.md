@@ -241,6 +241,22 @@ Add entries in this format:
 **Recommendation:** Use `poc/VERSION` as the source of truth, stamp it into the interim app bundle, and let the manual GitHub release workflow increment it before publishing.
 **Carry forward:** Yes.
 
+### 2026-05-07 - Selected Terms Need Context Translations Before Meaning
+
+**Area:** UI
+**Observed:** Product feedback requested target-language renderings at the top of the selected-term detail pane, before the existing meaning and contextual meaning fields. A single dictionary-like word is not enough; the rendering must fit the exact sentence and can include 1-3 alternatives when that makes the term easier to understand.
+**Why it matters:** A selected word or phrase often needs an immediate native-language anchor before deeper explanation, but literal one-word glosses can mislead users about idioms, tone, or context.
+**Recommendation:** Ask the provider for 1-3 context-driven selected-term translations in the same structured detail response and show them before Meaning in the Explanation pane.
+**Carry forward:** Yes.
+
+### 2026-05-07 - Close Shortcut Should Close Windows, Not Quit
+
+**Area:** windowing
+**Observed:** Product feedback requested `Command+W` as an explicit close-window shortcut for the assistant surface.
+**Why it matters:** A menu-bar assistant should behave like a normal macOS window: closing hides the current surface while the app stays available from the menu bar and global trigger.
+**Recommendation:** Keep `Command+Q` as quit and use `Command+W` only to close the active assistant window or currently visible assistant surface.
+**Carry forward:** Yes.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

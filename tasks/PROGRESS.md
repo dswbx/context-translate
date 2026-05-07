@@ -334,3 +334,30 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `bash -n poc/scripts/package-app.sh`; `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/release-poc.yml"); puts "workflow yaml ok"'`; `swift build`; `bash scripts/package-app.sh`; `plutil -extract CFBundleShortVersionString raw "poc/dist/Context Translate POC.app/Contents/Info.plist"`; `plutil -extract CFBundleVersion raw "poc/dist/Context Translate POC.app/Contents/Info.plist"`; `plutil -lint "poc/dist/Context Translate POC.app/Contents/Info.plist"`; `codesign --verify --deep --strict "poc/dist/Context Translate POC.app"`; `test -x "poc/dist/Context Translate POC.app/Contents/MacOS/context-translate-poc"`
 **Decisions made:** Use simple incrementing POC versions like `poc-1`, `poc-2` instead of semantic versioning during discovery.
 **Next step:** Run the workflow manually when a shareable POC build should be published.
+
+## 2026-05-07 - Added Close Shortcut And Term Translation
+
+**Task:** TASK-003
+**Summary:** Added a `Command+W` Close Window command that closes the active assistant surface without quitting the app, and added a direct selected-term translation above Meaning in the Explain detail pane.
+**Files changed:** `poc/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `tasks/CURRENT.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Keep `Command+Q` as quit. Treat selected-term translation as part of the provider-backed explanation response so idioms and phrases can be translated in context.
+**Next step:** Manually run the POC and verify `Command+W` from normal and bubble windows plus provider output for the new Translation field.
+
+## 2026-05-07 - Made Term Translation Context-Driven
+
+**Task:** TASK-003
+**Summary:** Changed the selected-term detail prompt and UI from one direct translation to 1-3 context-driven translation alternatives shown before Meaning.
+**Files changed:** `poc/Sources/ContextTranslateDiscovery/main.swift`, `docs/DISCOVERY.md`, `docs/DECISIONS.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`
+**Decisions made:** Selected-term translations should be natural renderings in the exact sentence context, with alternatives when useful, rather than dictionary-style single-word glosses.
+**Next step:** Manually test selected words and idiomatic phrases with a configured provider to judge whether the alternatives are understandable.
+
+## 2026-05-07 - Compacted Context Translation Display
+
+**Task:** TASK-003
+**Summary:** Changed selected-term context translation alternatives from stacked lines to comma-separated inline text to reduce detail-pane height.
+**Files changed:** `poc/Sources/ContextTranslateDiscovery/main.swift`, `tasks/PROGRESS.md`
+**Checks run:** `swift build`; `git diff --check`
+**Decisions made:** Keep the provider response as structured alternatives, but render them inline for a denser detail pane.
+**Next step:** Manually check that long alternatives wrap cleanly in the Explain detail pane.
