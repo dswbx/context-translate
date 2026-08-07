@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 struct CodexCLIModel: Decodable, Equatable, Identifiable {
@@ -20,10 +21,10 @@ struct CodexCLIModelCatalog: Decodable {
 
 enum CodexModelSelection {
     static func resolve(saved: String?, available: [String]) -> String? {
-        guard let saved, !saved.isEmpty, available.contains(saved) else {
-            return nil
+        if let saved, !saved.isEmpty, available.contains(saved) {
+            return saved
         }
-        return saved
+        return available.first
     }
 }
 
@@ -147,7 +148,16 @@ struct CodexCLIRunner {
                 currentDirectory: nil,
                 timeout: 20
             )
-            return result.status == 0 ? .ready : .unavailable(.notAuthenticated)
+            if result.status == 0 {
+                return .ready
+            }
+
+            let statusText = String(decoding: result.standardOutput + result.standardError, as: UTF8.self)
+                .lowercased()
+            let authenticationMarkers = ["not logged in", "logged out", "unauthenticated"]
+            return authenticationMarkers.contains(where: statusText.contains)
+                ? .unavailable(.notAuthenticated)
+                : .unavailable(.commandFailed)
         } catch is CancellationError {
             return .unknown
         } catch {
@@ -181,7 +191,11 @@ struct CodexCLIRunner {
         let fileManager = FileManager.default
         let temporaryDirectory = fileManager.temporaryDirectory
             .appendingPathComponent("context-translate-codex-\(UUID().uuidString)", isDirectory: true)
-        try fileManager.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        try fileManager.createDirectory(
+            at: temporaryDirectory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
         defer { try? fileManager.removeItem(at: temporaryDirectory) }
 
         let outputURL = temporaryDirectory.appendingPathComponent("response.txt")
@@ -258,10 +272,13 @@ struct CodexCLIRunner {
         }
 
         let process = Process()
-        let processControl = CodexProcessControl(process: process)
         let inputPipe = Pipe()
         let outputPipe = Pipe()
         let errorPipe = Pipe()
+        let processControl = CodexProcessControl(
+            process: process,
+            outputHandles: [outputPipe.fileHandleForReading, errorPipe.fileHandleForReading]
+        )
         process.executableURL = executableURL
         process.arguments = arguments
         process.currentDirectoryURL = currentDirectory
@@ -270,6 +287,7 @@ struct CodexCLIRunner {
         process.standardError = errorPipe
 
         return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
             let outputTask = Task.detached {
                 outputPipe.fileHandleForReading.readDataToEndOfFile()
             }
@@ -283,11 +301,15 @@ struct CodexCLIRunner {
                 }
 
                 do {
-                    try process.run()
+                    try processControl.launch()
                     if let standardInput {
                         try inputPipe.fileHandleForWriting.write(contentsOf: standardInput)
                     }
                     try inputPipe.fileHandleForWriting.close()
+                } catch is CancellationError {
+                    process.terminationHandler = nil
+                    try? inputPipe.fileHandleForWriting.close()
+                    continuation.resume(throwing: CancellationError())
                 } catch {
                     process.terminationHandler = nil
                     try? inputPipe.fileHandleForWriting.close()
@@ -296,9 +318,13 @@ struct CodexCLIRunner {
             }
 
             let standardOutput = await outputTask.value
-            _ = await errorTask.value
+            let standardError = await errorTask.value
             try Task.checkCancellation()
-            return CodexProcessResult(status: status, standardOutput: standardOutput)
+            return CodexProcessResult(
+                status: status,
+                standardOutput: standardOutput,
+                standardError: standardError
+            )
         } onCancel: {
             processControl.terminate()
         }
@@ -308,21 +334,67 @@ struct CodexCLIRunner {
 private struct CodexProcessResult: Sendable {
     let status: Int32
     let standardOutput: Data
+    let standardError: Data
 }
 
 private final class CodexProcessControl: @unchecked Sendable {
     private let lock = NSLock()
     private let process: Process
+    private let outputHandles: [FileHandle]
+    private var cancellationRequested = false
 
-    init(process: Process) {
+    init(process: Process, outputHandles: [FileHandle]) {
         self.process = process
+        self.outputHandles = outputHandles
+    }
+
+    func launch() throws {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !cancellationRequested else {
+            throw CancellationError()
+        }
+        try process.run()
     }
 
     func terminate() {
         lock.lock()
-        defer { lock.unlock() }
-        if process.isRunning {
+        cancellationRequested = true
+        let shouldTerminate = process.isRunning
+        let processIdentifier = process.processIdentifier
+        let descendants = shouldTerminate ? descendantProcessIdentifiers(of: processIdentifier) : []
+        if shouldTerminate {
+            descendants.reversed().forEach { kill($0, SIGTERM) }
             process.terminate()
+        }
+        lock.unlock()
+
+        guard shouldTerminate else { return }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            defer { self.lock.unlock() }
+            descendants.reversed().forEach { kill($0, SIGKILL) }
+            if self.process.isRunning {
+                kill(processIdentifier, SIGKILL)
+            }
+            self.outputHandles.forEach { try? $0.close() }
+        }
+    }
+
+    private func descendantProcessIdentifiers(of parent: pid_t) -> [pid_t] {
+        let requiredCapacity = proc_listchildpids(parent, nil, 0)
+        guard requiredCapacity > 0 else { return [] }
+
+        var children = [pid_t](repeating: 0, count: Int(requiredCapacity))
+        let returnedCount = children.withUnsafeMutableBytes { buffer in
+            proc_listchildpids(parent, buffer.baseAddress, Int32(buffer.count))
+        }
+        guard returnedCount > 0 else { return [] }
+
+        let count = min(Int(returnedCount), children.count)
+        return children.prefix(count).filter { $0 > 0 }.flatMap { child in
+            [child] + descendantProcessIdentifiers(of: child)
         }
     }
 }

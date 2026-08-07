@@ -406,3 +406,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift test` with the installed Xcode toolchain; `swift build`; `git diff --check`; `codex login status`; live `codex debug models`; live read-only `codex exec` smoke tests.
 **Decisions made:** Keep Codex CLI experimental and never read its credentials or model cache. Discover model slugs from the CLI and retain CLI Default as the fallback. Keep Ollama and OpenRouter because live discovery showed that even trivial Codex calls carry substantial agent-context and startup overhead.
 **Next step:** Run the POC and manually verify Codex model refresh, connection testing, Explain, selected-term detail, Composer, Review, and Stop behavior before deciding whether the provider feels useful enough to keep.
+
+## 2026-08-07 - Hardened Codex CLI Process And Provider State
+
+**Task:** TASK-003
+**Summary:** Closed final review gaps by force-stopping timeout-resistant CLI processes, preventing canceled requests from overwriting newer UI state, re-resolving the executable on refresh, distinguishing logged-out status from command failures, clearing stale provider output, and aligning saved-model fallback with the first visible CLI model.
+**Files changed:** `poc/Sources/ContextTranslateDiscovery/CodexCLIRunner.swift`, `poc/Sources/ContextTranslateDiscovery/main.swift`, `poc/Tests/ContextTranslateDiscoveryTests/CodexCLIRunnerTests.swift`, `tasks/PROGRESS.md`
+**Checks run:** 15 Swift tests with the installed Xcode toolchain; `swift build`; `bash -n poc/scripts/reset-settings.sh`; `git diff --check`; independent implementation review.
+**Decisions made:** Treat Stop and timeout as process-lifecycle guarantees, not only UI state changes. Keep CLI Default only when discovery returns no usable catalog; otherwise fall back to the first visible dynamically discovered model.
+**Next step:** Complete the manual POC interaction pass recorded in `tasks/CURRENT.md`.

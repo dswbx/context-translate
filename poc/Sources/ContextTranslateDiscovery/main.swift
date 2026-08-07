@@ -78,7 +78,11 @@ final class DiscoveryStore: ObservableObject {
     private var lastGeneratedComposerInput: String?
     private var lastReviewedSentence: String?
     private var cachedOpenRouterAPIKey: String?
-    private let codexRunner: CodexCLIRunner
+    private var codexRunner: CodexCLIRunner
+    private var translationRequestID: UUID?
+    private var detailRequestID: UUID?
+    private var composerRequestID: UUID?
+    private var reviewRequestID: UUID?
     private var shortcutRecordingMonitor: Any?
     var menuBarVisibilityDidChange: ((Bool) -> Void)?
     var shortcutDidChange: ((GlobalShortcut) -> Void)?
@@ -321,9 +325,11 @@ final class DiscoveryStore: ObservableObject {
             regenerateAIResponses()
         } else {
             stopAIResponses()
-            if provider == .appleIntelligence {
+            if provider == .appleIntelligence || provider == .codexCLI {
                 germanTranslation = ""
                 selectedPhrase = nil
+                composerOutputs = .empty
+                reviewFeedback = nil
                 detailStatusMessage = selectedWordText == nil ? "Click a word to explain it." : providerMissingConfigurationMessage(for: provider, action: "explain this word")
             }
         }
@@ -446,6 +452,7 @@ final class DiscoveryStore: ObservableObject {
     }
 
     func refreshCodexStatusAndModels() async {
+        codexRunner = CodexCLIRunner()
         isCheckingCodex = true
         codexReadiness = .checking
         codexStatusMessage = codexReadiness.message
@@ -466,7 +473,7 @@ final class DiscoveryStore: ObservableObject {
             let resolvedModel = CodexModelSelection.resolve(
                 saved: selectedCodexModel,
                 available: models.map(\.slug)
-            ) ?? ""
+            ) ?? models.first?.slug ?? ""
             if resolvedModel != selectedCodexModel {
                 selectedCodexModel = resolvedModel
                 UserDefaults.standard.set(resolvedModel, forKey: selectedCodexModelKey)
@@ -485,6 +492,7 @@ final class DiscoveryStore: ObservableObject {
     }
 
     func testCodexConnection() async {
+        codexRunner = CodexCLIRunner()
         isCheckingCodex = true
         codexStatusMessage = "Testing Codex CLI with \(selectedCodexModelDisplayName)..."
         defer { isCheckingCodex = false }
@@ -507,7 +515,9 @@ final class DiscoveryStore: ObservableObject {
         } catch is CancellationError {
             codexStatusMessage = "Codex CLI test stopped."
         } catch {
+            codexReadiness = .unavailable(.commandFailed)
             codexStatusMessage = "Codex CLI test failed. Check authentication, model access, and usage limits."
+            updateCodexProviderAfterReadinessChange()
         }
     }
 
@@ -634,6 +644,7 @@ final class DiscoveryStore: ObservableObject {
     func stopTranslation() {
         translationTask?.cancel()
         translationTask = nil
+        translationRequestID = nil
         isGeneratingTranslation = false
         if isActiveProviderConfigured {
             translationStatusMessage = "Stopped."
@@ -643,6 +654,7 @@ final class DiscoveryStore: ObservableObject {
     func stopDetail() {
         detailTask?.cancel()
         detailTask = nil
+        detailRequestID = nil
         isGeneratingDetail = false
         if isActiveProviderConfigured {
             detailStatusMessage = selectedWordText == nil ? "Click a word to explain it." : "Stopped."
@@ -652,6 +664,7 @@ final class DiscoveryStore: ObservableObject {
     func stopComposer() {
         composerTask?.cancel()
         composerTask = nil
+        composerRequestID = nil
         isGeneratingComposer = false
         if isActiveProviderConfigured {
             composerStatusMessage = "Stopped."
@@ -661,6 +674,7 @@ final class DiscoveryStore: ObservableObject {
     func stopReview() {
         reviewTask?.cancel()
         reviewTask = nil
+        reviewRequestID = nil
         isGeneratingReview = false
         if isActiveProviderConfigured {
             reviewStatusMessage = "Stopped."
@@ -669,6 +683,8 @@ final class DiscoveryStore: ObservableObject {
 
     private func generateAITranslation() {
         translationTask?.cancel()
+        let requestID = UUID()
+        translationRequestID = requestID
         isGeneratingTranslation = true
         translationStatusMessage = "Translating with \(activeModelDisplayName)..."
 
@@ -688,22 +704,28 @@ final class DiscoveryStore: ObservableObject {
                 } else {
                     response = try await askActiveProvider(prompt: prompt)
                 }
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, translationRequestID == requestID else { return }
                 germanTranslation = response
                 translationStatusMessage = "Translated with \(activeModelDisplayName)."
             } catch is CancellationError {
+                guard translationRequestID == requestID else { return }
                 translationStatusMessage = "Translation stopped."
             } catch {
+                guard translationRequestID == requestID else { return }
                 germanTranslation = ""
                 translationStatusMessage = providerRequestFailureMessage
             }
+            guard translationRequestID == requestID else { return }
             isGeneratingTranslation = false
             translationTask = nil
+            translationRequestID = nil
         }
     }
 
     private func generateAIDetail(for token: WordToken) {
         detailTask?.cancel()
+        let requestID = UUID()
+        detailRequestID = requestID
         isGeneratingDetail = true
         detailStatusMessage = "Asking \(activeModelDisplayName)..."
 
@@ -740,22 +762,28 @@ final class DiscoveryStore: ObservableObject {
         detailTask = Task {
             do {
                 let response = try await askActiveProvider(prompt: prompt)
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, detailRequestID == requestID else { return }
                 selectedPhrase = PhraseExplanation.fromModelResponse(response, fallbackWord: token.text)
                 detailStatusMessage = "Generated with \(activeModelDisplayName)."
             } catch is CancellationError {
+                guard detailRequestID == requestID else { return }
                 detailStatusMessage = "Explanation stopped."
             } catch {
+                guard detailRequestID == requestID else { return }
                 selectedPhrase = nil
                 detailStatusMessage = providerRequestFailureMessage
             }
+            guard detailRequestID == requestID else { return }
             isGeneratingDetail = false
             detailTask = nil
+            detailRequestID = nil
         }
     }
 
     private func generateAIComposerOutput(for input: String) {
         composerTask?.cancel()
+        let requestID = UUID()
+        composerRequestID = requestID
         composerOutputs = .empty
         isGeneratingComposer = true
         composerStatusMessage = "Composing with \(activeModelDisplayName)..."
@@ -779,23 +807,29 @@ final class DiscoveryStore: ObservableObject {
         composerTask = Task {
             do {
                 let response = try await askActiveProvider(prompt: prompt)
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, composerRequestID == requestID else { return }
                 composerOutputs = ComposerOutputs.fromModelResponse(response)
                 lastGeneratedComposerInput = input
                 composerStatusMessage = "Composed with \(activeModelDisplayName)."
             } catch is CancellationError {
+                guard composerRequestID == requestID else { return }
                 composerStatusMessage = "Composition stopped."
             } catch {
+                guard composerRequestID == requestID else { return }
                 composerOutputs = .empty
                 composerStatusMessage = providerRequestFailureMessage
             }
+            guard composerRequestID == requestID else { return }
             isGeneratingComposer = false
             composerTask = nil
+            composerRequestID = nil
         }
     }
 
     private func generateAIReview(sentence: String, intent: String) {
         reviewTask?.cancel()
+        let requestID = UUID()
+        reviewRequestID = requestID
         reviewFeedback = nil
         isGeneratingReview = true
         reviewStatusMessage = "Reviewing with \(activeModelDisplayName)..."
@@ -836,18 +870,22 @@ final class DiscoveryStore: ObservableObject {
         reviewTask = Task {
             do {
                 let response = try await askActiveProvider(prompt: prompt)
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, reviewRequestID == requestID else { return }
                 reviewFeedback = ReviewFeedback.fromModelResponse(response)
                 lastReviewedSentence = sentence
                 reviewStatusMessage = "Reviewed with \(activeModelDisplayName)."
             } catch is CancellationError {
+                guard reviewRequestID == requestID else { return }
                 reviewStatusMessage = "Review stopped."
             } catch {
+                guard reviewRequestID == requestID else { return }
                 reviewFeedback = nil
                 reviewStatusMessage = providerRequestFailureMessage
             }
+            guard reviewRequestID == requestID else { return }
             isGeneratingReview = false
             reviewTask = nil
+            reviewRequestID = nil
         }
     }
 

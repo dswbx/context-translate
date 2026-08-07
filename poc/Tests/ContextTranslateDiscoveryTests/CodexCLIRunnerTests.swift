@@ -58,6 +58,25 @@ struct CodexCLIRunnerTests {
         #expect(readiness == .ready)
     }
 
+    @Test func readinessDistinguishesLoggedOutFromCommandFailure() async throws {
+        let loggedOutFixture = try makeExecutableFixture(body: """
+        echo "Not logged in"
+        exit 1
+        """)
+        defer { try? FileManager.default.removeItem(at: loggedOutFixture.deletingLastPathComponent()) }
+        let failureFixture = try makeExecutableFixture(body: """
+        echo "internal CLI failure" >&2
+        exit 2
+        """)
+        defer { try? FileManager.default.removeItem(at: failureFixture.deletingLastPathComponent()) }
+
+        let loggedOut = await CodexCLIRunner(executableURL: loggedOutFixture).checkReadiness()
+        let failed = await CodexCLIRunner(executableURL: failureFixture).checkReadiness()
+
+        #expect(loggedOut == .unavailable(.notAuthenticated))
+        #expect(failed == .unavailable(.commandFailed))
+    }
+
     @Test func fetchModelsUsesCLIJSON() async throws {
         let fixture = try makeExecutableFixture(body: """
         if [ "$1" = "debug" ] && [ "$2" = "models" ]; then
@@ -145,14 +164,60 @@ struct CodexCLIRunnerTests {
         }
     }
 
+    @Test func timeoutForceKillsTermResistantProcess() async throws {
+        let fixture = try makeExecutableFixture(body: """
+        trap '' TERM
+        sleep 30
+        """)
+        defer { try? FileManager.default.removeItem(at: fixture.deletingLastPathComponent()) }
+        let runner = CodexCLIRunner(executableURL: fixture, generationTimeout: 0.1)
+        let clock = ContinuousClock()
+        let started = clock.now
+
+        do {
+            _ = try await runner.generate(prompt: "fixture prompt", modelSlug: nil)
+            Issue.record("Expected timeout")
+        } catch let error as CodexCLIError {
+            #expect(error == .timedOut)
+            #expect(started.duration(to: clock.now) < .seconds(3))
+        }
+    }
+
+    @Test func cancellationBeforeLaunchReturnsPromptly() async throws {
+        let fixture = try makeExecutableFixture(body: """
+        exec sleep 30
+        """)
+        defer { try? FileManager.default.removeItem(at: fixture.deletingLastPathComponent()) }
+        let runner = CodexCLIRunner(executableURL: fixture, generationTimeout: 60)
+        let clock = ContinuousClock()
+        let started = clock.now
+        let task = Task {
+            try await runner.generate(prompt: "fixture prompt", modelSlug: nil)
+        }
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            Issue.record("Expected cancellation")
+        } catch is CancellationError {
+            #expect(started.duration(to: clock.now) < .seconds(3))
+        }
+    }
+
     @Test func selectedModelKeepsAvailableSavedSlug() {
         let selected = CodexModelSelection.resolve(saved: "b", available: ["a", "b"])
 
         #expect(selected == "b")
     }
 
-    @Test func selectedModelFallsBackToCLIDefault() {
+    @Test func selectedModelFallsBackToFirstVisibleModel() {
         let selected = CodexModelSelection.resolve(saved: "missing", available: ["a"])
+
+        #expect(selected == "a")
+    }
+
+    @Test func selectedModelFallsBackToCLIDefaultForEmptyCatalog() {
+        let selected = CodexModelSelection.resolve(saved: "missing", available: [])
 
         #expect(selected == nil)
     }
