@@ -367,6 +367,26 @@ struct CodexCLIRunnerTests {
         #expect(!selection.fastEnabled)
     }
 
+    @Test func catalogLoadStateAllowsProvisionalBundledResultBeforeLiveRefresh() throws {
+        var state = CodexCatalogLoadState()
+        let pendingRequestID = state.beginBundledLoad()
+        let requestID = try #require(pendingRequestID)
+
+        #expect(state.shouldApplyBundledResult(requestID: requestID))
+        #expect(state.beginBundledLoad() == nil)
+    }
+
+    @Test func catalogLoadStateRejectsBundledResultAfterLiveRefreshStarts() throws {
+        var state = CodexCatalogLoadState()
+        let pendingRequestID = state.beginBundledLoad()
+        let requestID = try #require(pendingRequestID)
+
+        state.beginLiveRefresh()
+
+        #expect(!state.shouldApplyBundledResult(requestID: requestID))
+        #expect(state.beginBundledLoad() == nil)
+    }
+
     private func makeExecutableFixture(body: String) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

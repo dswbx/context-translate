@@ -83,7 +83,7 @@ final class DiscoveryStore: ObservableObject {
     private var lastReviewedSentence: String?
     private var cachedOpenRouterAPIKey: String?
     private var codexRunner: CodexCLIRunner
-    private var hasAttemptedBundledCodexLoad = false
+    private var codexCatalogLoadState = CodexCatalogLoadState()
     private var translationRequestID: UUID?
     private var detailRequestID: UUID?
     private var composerRequestID: UUID?
@@ -496,6 +496,7 @@ final class DiscoveryStore: ObservableObject {
     }
 
     func refreshCodexStatusAndModels() async {
+        codexCatalogLoadState.beginLiveRefresh()
         codexRunner = CodexCLIRunner()
         isCheckingCodex = true
         codexReadiness = .checking
@@ -526,16 +527,20 @@ final class DiscoveryStore: ObservableObject {
     }
 
     func loadBundledCodexModelsIfNeeded() async {
-        guard !hasAttemptedBundledCodexLoad, codexModels.isEmpty, !isCheckingCodex else {
+        guard codexModels.isEmpty,
+              !isCheckingCodex,
+              let requestID = codexCatalogLoadState.beginBundledLoad() else {
             return
         }
-        hasAttemptedBundledCodexLoad = true
         codexRunner = CodexCLIRunner()
 
         do {
             let models = try await codexRunner.fetchBundledModels()
-            guard codexModels.isEmpty else { return }
-            applyCodexModels(models)
+            guard codexModels.isEmpty,
+                  codexCatalogLoadState.shouldApplyBundledResult(requestID: requestID) else {
+                return
+            }
+            codexModels = models
             if !models.isEmpty, !codexReadiness.isReady {
                 codexStatusMessage = "Loaded \(models.count) models from the installed CLI. Refresh to verify account availability."
             }
@@ -3181,6 +3186,11 @@ struct SettingsView: View {
                 )
             ) {
                 Text("CLI Default").tag("")
+                if !store.selectedCodexModel.isEmpty,
+                   !store.codexModels.contains(where: { $0.slug == store.selectedCodexModel }) {
+                    Text("\(store.selectedCodexModel) (verifying...)")
+                        .tag(store.selectedCodexModel)
+                }
                 ForEach(store.codexModels) { model in
                     Text(model.displayName).tag(model.slug)
                 }

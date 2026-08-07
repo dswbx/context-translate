@@ -119,6 +119,28 @@ struct CodexCLISpeedSelection: Equatable {
     }
 }
 
+struct CodexCatalogLoadState: Equatable {
+    private var generation = 0
+    private var hasStartedBundledLoad = false
+    private var hasStartedLiveRefresh = false
+
+    mutating func beginBundledLoad() -> Int? {
+        guard !hasStartedBundledLoad, !hasStartedLiveRefresh else { return nil }
+        hasStartedBundledLoad = true
+        generation += 1
+        return generation
+    }
+
+    mutating func beginLiveRefresh() {
+        hasStartedLiveRefresh = true
+        generation += 1
+    }
+
+    func shouldApplyBundledResult(requestID: Int) -> Bool {
+        !hasStartedLiveRefresh && requestID == generation
+    }
+}
+
 enum CodexModelSelection {
     static func resolve(saved: String?, available: [String]) -> String? {
         if let saved, !saved.isEmpty, available.contains(saved) {
