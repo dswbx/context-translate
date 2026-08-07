@@ -415,3 +415,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** 15 Swift tests with the installed Xcode toolchain; `swift build`; `bash -n poc/scripts/reset-settings.sh`; `git diff --check`; independent implementation review.
 **Decisions made:** Treat Stop and timeout as process-lifecycle guarantees, not only UI state changes. Keep CLI Default only when discovery returns no usable catalog; otherwise fall back to the first visible dynamically discovered model.
 **Next step:** Complete the manual POC interaction pass recorded in `tasks/CURRENT.md`.
+
+## 2026-08-07 - Added Adjustable Codex Speed Controls
+
+**Task:** TASK-003
+**Summary:** Added dynamically discovered Reasoning and Fast settings for Codex CLI, defaulted supported models to Low reasoning, applied the priority service tier only when advertised and enabled, and made Settings load the installed CLI's bundled model catalog before a live refresh.
+**Files changed:** `poc/Sources/ContextTranslateDiscovery/CodexCLIRunner.swift`, `poc/Sources/ContextTranslateDiscovery/main.swift`, `poc/Tests/ContextTranslateDiscoveryTests/CodexCLIRunnerTests.swift`, `poc/scripts/reset-settings.sh`, `poc/README.md`, `docs/DISCOVERY.md`, `tasks/CURRENT.md`, `tasks/PROGRESS.md`
+**Checks run:** 21 Swift tests and Swift build using the full Xcode toolchain with an isolated SwiftPM scratch path; `bash -n poc/scripts/reset-settings.sh`; `git diff --check`; live installed-CLI catalog and configuration probes; independent implementation review.
+**Decisions made:** Prefer Low reasoning and capability-gated Fast over the experimental persistent app-server. Use `debug models --bundled` for immediate Settings data and keep explicit live Refresh for current account availability.
+**Next step:** Package and run the POC, then compare Codex response latency across Low/Medium and Fast on/off for the same Explain and Composer inputs.

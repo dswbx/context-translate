@@ -281,6 +281,14 @@ Add entries in this format:
 **Recommendation:** Keep Codex CLI as an explicitly experimental POC provider beside Ollama and OpenRouter. Discover models dynamically, preserve CLI Default when discovery fails, isolate each call in an ephemeral temporary directory with a read-only sandbox, and do not make Codex the production default without latency and usage evaluation plus confirmation that third-party subscription-backed use is supported.
 **Carry forward:** Yes, as a provider experiment and risk input rather than a production commitment.
 
+### 2026-08-07 - Codex Speed Controls Help More Than Process Warming
+
+**Area:** model providers
+**Observed:** On the installed Codex CLI 0.142.5, process startup measured about 0.14 seconds, live `codex debug models` took about 2.9-3.3 seconds, and `codex debug models --bundled` took about 0.03 seconds. Every visible model advertised Low reasoning, while GPT-5.5 and GPT-5.4 advertised a priority service tier named Fast with a catalog description of roughly 1.5x speed and increased usage. The experimental app-server can keep a CLI process alive, but it does not remove the large coding-agent instruction prefix from a fresh isolated request.
+**Why it matters:** Model refresh latency and generation latency are separate. A bundled catalog can make Settings immediate, while Low reasoning and a capability-gated Fast option can reduce generation time. A persistent protocol would add lifecycle and versioning complexity for comparatively little measured process-startup savings.
+**Recommendation:** Default language-assistance requests to Low reasoning, expose Fast only from advertised service-tier metadata, load the bundled catalog immediately, retain live Refresh as the account-authoritative check, and defer app-server integration until end-to-end latency measurements show process warming is worth its protocol cost.
+**Carry forward:** Yes, as provider UX and performance guidance.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

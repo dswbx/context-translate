@@ -81,11 +81,13 @@ To try Codex CLI:
 1. Install Codex CLI separately.
 2. Run `codex login` in Terminal and complete the browser flow.
 3. Open POC Settings and select **Codex CLI**.
-4. Click **Refresh Models**.
-5. Choose **CLI Default** or a model returned by the installed CLI.
-6. Click **Test Codex CLI** before using Explain, Composer, or Review.
+4. Choose a model from the installed CLI's bundled catalog, which loads without a network refresh.
+5. Choose a **Reasoning** level. **Low** is the default for faster language-assistance requests.
+6. Enable **Fast mode** when the selected model advertises it. Fast uses the CLI's priority service tier and increased subscription usage.
+7. Click **Refresh Models** to verify the current live catalog and account availability.
+8. Click **Test Codex CLI** before using Explain, Composer, or Review.
 
-The POC does not read or store Codex credentials, configuration, or model-cache files. Codex CLI is a coding agent and carries substantially more prompt and startup overhead than a direct model API, so this provider remains a discovery experiment rather than the recommended default.
+The POC does not read or store Codex credentials, configuration, or model-cache files. Reasoning choices and Fast availability come from the installed CLI catalog rather than model-name checks. Codex CLI is a coding agent and carries substantially more prompt overhead than a direct model API, so this provider remains a discovery experiment rather than the recommended default.
 
 Apple Intelligence readiness checks both Foundation Models generation and Apple Translation with the current Mine/Theirs languages. If Apple Intelligence later becomes unavailable while selected, the POC shows the Apple-specific failure reason and does not silently fall back to Ollama or OpenRouter.
 
