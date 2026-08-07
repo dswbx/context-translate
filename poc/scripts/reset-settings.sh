@@ -4,6 +4,7 @@ set -euo pipefail
 KEYS=(
   "ContextDiscovery.SelectedOllamaModel"
   "ContextDiscovery.SelectedProvider"
+  "ContextDiscovery.SelectedCodexModel"
   "ContextDiscovery.SelectedOpenRouterModel"
   "ContextDiscovery.MyLanguage"
   "ContextDiscovery.TheirLanguage"

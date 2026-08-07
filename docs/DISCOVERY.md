@@ -273,6 +273,14 @@ Add entries in this format:
 **Recommendation:** Provider prompts should state field-level language rules explicitly: context translations in the user's native language only; meaning, contextual meaning, tone, and examples in the source language only; no mixed-language fields.
 **Carry forward:** Yes.
 
+### 2026-08-07 - Codex CLI Can Bridge User Authentication But Has Agent Overhead
+
+**Area:** model providers
+**Observed:** The POC can locate a GUI-invisible Codex executable through conventional macOS paths, confirm the user's existing ChatGPT-backed login with `codex login status`, discover the installed CLI's visible model catalog through `codex debug models`, and execute cancellable read-only prompts without reading credential or model-cache files. On this Mac the live catalog returned five visible models. A minimal live generation succeeded, but the CLI loaded substantial agent context and reported roughly 8,950 tokens for an exact `OK` response. Trying `--ignore-user-config` did not remove all plugin and skill loading in the installed CLI build and reported even higher token use.
+**Why it matters:** Subscription-backed CLI access is technically viable and removes API-key setup, but Codex is a full coding agent rather than a lightweight inference transport. Startup latency, large hidden context, CLI version drift, and the experimental model-catalog command can make it expensive and fragile for frequent translation calls.
+**Recommendation:** Keep Codex CLI as an explicitly experimental POC provider beside Ollama and OpenRouter. Discover models dynamically, preserve CLI Default when discovery fails, isolate each call in an ephemeral temporary directory with a read-only sandbox, and do not make Codex the production default without latency and usage evaluation plus confirmation that third-party subscription-backed use is supported.
+**Carry forward:** Yes, as a provider experiment and risk input rather than a production commitment.
+
 ## Extraction Checklist
 
 Before writing the real MVP implementation plan, summarize:

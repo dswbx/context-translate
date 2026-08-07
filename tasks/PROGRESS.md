@@ -397,3 +397,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** `swift build`; `git diff --check`
 **Decisions made:** Context translate is the native-language anchor. The rest of the explanation should remain in the source language so the user learns how the English term works.
 **Next step:** Re-test Apple Intelligence selected-term detail with Mine set to German and Theirs set to English; confirm only Context translate is German.
+
+## 2026-08-07 - Added Experimental Codex CLI Provider
+
+**Task:** TASK-003
+**Summary:** Added Codex CLI as an optional POC provider with CLI-owned authentication, conventional macOS executable discovery, dynamic model discovery, persisted model selection, read-only ephemeral generation, cancellation, Settings readiness controls, and focused subprocess tests.
+**Files changed:** `poc/Package.swift`, `poc/Sources/ContextTranslateDiscovery/CodexCLIRunner.swift`, `poc/Sources/ContextTranslateDiscovery/main.swift`, `poc/Tests/ContextTranslateDiscoveryTests/CodexCLIRunnerTests.swift`, `poc/scripts/reset-settings.sh`, `poc/README.md`, `docs/TERMINOLOGY.md`, `docs/DISCOVERY.md`, `tasks/CURRENT.md`, `tasks/PROGRESS.md`
+**Checks run:** `swift test` with the installed Xcode toolchain; `swift build`; `git diff --check`; `codex login status`; live `codex debug models`; live read-only `codex exec` smoke tests.
+**Decisions made:** Keep Codex CLI experimental and never read its credentials or model cache. Discover model slugs from the CLI and retain CLI Default as the fallback. Keep Ollama and OpenRouter because live discovery showed that even trivial Codex calls carry substantial agent-context and startup overhead.
+**Next step:** Run the POC and manually verify Codex model refresh, connection testing, Explain, selected-term detail, Composer, Review, and Stop behavior before deciding whether the provider feels useful enough to keep.

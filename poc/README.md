@@ -20,6 +20,7 @@ The POC currently includes:
 - writing review mode
 - local Ollama provider
 - optional OpenRouter provider with Keychain-backed API key storage
+- experimental Codex CLI provider using the user's existing CLI authentication
 
 ## Run
 
@@ -29,6 +30,7 @@ Requirements:
 - Xcode Command Line Tools or Xcode with Swift installed
 - optional: Ollama running locally at `localhost:11434`
 - optional: OpenRouter API key
+- optional: Codex CLI installed and authenticated with `codex login`
 
 From this directory:
 
@@ -69,9 +71,21 @@ The POC supports:
 
 - **Ollama:** default, local provider. Install/run a model in Ollama, then refresh models in Settings.
 - **OpenRouter:** optional cloud provider. Add an API key in Settings. The key is stored in macOS Keychain.
+- **Codex CLI:** experimental cloud provider. The POC finds an installed Codex executable, checks `codex login status`, discovers selectable models with `codex debug models`, and uses the CLI's existing authentication.
 - **Apple Intelligence:** optional on-device provider. Select it in Settings, run **Test Apple Intelligence**, and use it only after the readiness test passes.
 
-OpenRouter sends selected text and prompts to OpenRouter and the selected upstream model provider. Ollama keeps model calls local. Apple Intelligence uses Apple on-device generation when this Mac is eligible, Apple Intelligence is enabled, local models are ready, and the selected translation language pair is installed.
+OpenRouter sends selected text and prompts to OpenRouter and the selected upstream model provider. Codex CLI sends selected text and prompts to OpenAI under the user's authenticated Codex account. Ollama keeps model calls local. Apple Intelligence uses Apple on-device generation when this Mac is eligible, Apple Intelligence is enabled, local models are ready, and the selected translation language pair is installed.
+
+To try Codex CLI:
+
+1. Install Codex CLI separately.
+2. Run `codex login` in Terminal and complete the browser flow.
+3. Open POC Settings and select **Codex CLI**.
+4. Click **Refresh Models**.
+5. Choose **CLI Default** or a model returned by the installed CLI.
+6. Click **Test Codex CLI** before using Explain, Composer, or Review.
+
+The POC does not read or store Codex credentials, configuration, or model-cache files. Codex CLI is a coding agent and carries substantially more prompt and startup overhead than a direct model API, so this provider remains a discovery experiment rather than the recommended default.
 
 Apple Intelligence readiness checks both Foundation Models generation and Apple Translation with the current Mine/Theirs languages. If Apple Intelligence later becomes unavailable while selected, the POC shows the Apple-specific failure reason and does not silently fall back to Ollama or OpenRouter.
 
