@@ -16,6 +16,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "ContextTranslateDiscovery"
+        ),
+        .testTarget(
+            name: "ContextTranslateDiscoveryTests",
+            dependencies: ["ContextTranslateDiscovery"]
         )
     ]
 )
