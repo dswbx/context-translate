@@ -145,6 +145,18 @@ struct CodexCLIRunnerTests {
         }
     }
 
+    @Test func selectedModelKeepsAvailableSavedSlug() {
+        let selected = CodexModelSelection.resolve(saved: "b", available: ["a", "b"])
+
+        #expect(selected == "b")
+    }
+
+    @Test func selectedModelFallsBackToCLIDefault() {
+        let selected = CodexModelSelection.resolve(saved: "missing", available: ["a"])
+
+        #expect(selected == nil)
+    }
+
     private func makeExecutableFixture(body: String) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

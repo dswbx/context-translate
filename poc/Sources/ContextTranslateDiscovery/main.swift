@@ -31,17 +31,22 @@ final class DiscoveryStore: ObservableObject {
     @Published var selectedProvider: AIProvider
     @Published var ollamaModels: [String]
     @Published var selectedOllamaModel: String
+    @Published var codexModels: [CodexCLIModel]
+    @Published var selectedCodexModel: String
     @Published var selectedOpenRouterModel: String
     @Published var openRouterAPIKeyInput: String
     @Published var myLanguage: LanguageOption
     @Published var theirLanguage: LanguageOption
     @Published var ollamaStatusMessage: String
     @Published var openRouterStatusMessage: String
+    @Published var codexStatusMessage: String
     @Published var appleIntelligenceStatusMessage: String
     @Published var hasOpenRouterAPIKey: Bool
     @Published var isCheckingOllama: Bool
     @Published var isTestingOpenRouter: Bool
+    @Published var isCheckingCodex: Bool
     @Published var isTestingAppleIntelligence: Bool
+    @Published var codexReadiness: CodexCLIReadiness
     @Published var appleIntelligenceReadiness: AppleIntelligenceReadiness
     @Published var isGeneratingTranslation: Bool
     @Published var isGeneratingDetail: Bool
@@ -55,6 +60,7 @@ final class DiscoveryStore: ObservableObject {
 
     private let selectedModelKey = "ContextDiscovery.SelectedOllamaModel"
     private let selectedProviderKey = "ContextDiscovery.SelectedProvider"
+    private let selectedCodexModelKey = "ContextDiscovery.SelectedCodexModel"
     private let selectedOpenRouterModelKey = "ContextDiscovery.SelectedOpenRouterModel"
     private let myLanguageKey = "ContextDiscovery.MyLanguage"
     private let theirLanguageKey = "ContextDiscovery.TheirLanguage"
@@ -72,6 +78,7 @@ final class DiscoveryStore: ObservableObject {
     private var lastGeneratedComposerInput: String?
     private var lastReviewedSentence: String?
     private var cachedOpenRouterAPIKey: String?
+    private let codexRunner: CodexCLIRunner
     private var shortcutRecordingMonitor: Any?
     var menuBarVisibilityDidChange: ((Bool) -> Void)?
     var shortcutDidChange: ((GlobalShortcut) -> Void)?
@@ -109,15 +116,20 @@ final class DiscoveryStore: ObservableObject {
         self.selectedProvider = initialProvider
         self.ollamaModels = []
         self.selectedOllamaModel = UserDefaults.standard.string(forKey: selectedModelKey) ?? ""
+        self.codexModels = []
+        self.selectedCodexModel = UserDefaults.standard.string(forKey: selectedCodexModelKey) ?? ""
         self.selectedOpenRouterModel = UserDefaults.standard.string(forKey: selectedOpenRouterModelKey) ?? "openrouter/auto"
         self.openRouterAPIKeyInput = ""
         self.ollamaStatusMessage = "Ollama has not been checked yet."
         self.openRouterStatusMessage = hasOpenRouterKey ? "OpenRouter API key is stored in Keychain." : "Add an OpenRouter API key to use cloud models."
+        self.codexStatusMessage = CodexCLIReadiness.unknown.message
         self.appleIntelligenceStatusMessage = "Test Apple Intelligence before turning it on."
         self.hasOpenRouterAPIKey = hasOpenRouterKey
         self.isCheckingOllama = false
         self.isTestingOpenRouter = false
+        self.isCheckingCodex = false
         self.isTestingAppleIntelligence = false
+        self.codexReadiness = .unknown
         self.appleIntelligenceReadiness = .unknown
         self.isGeneratingTranslation = false
         self.isGeneratingDetail = false
@@ -128,6 +140,7 @@ final class DiscoveryStore: ObservableObject {
         self.showsMenuBarItem = savedShowsMenuBarItem
         self.globalShortcut = savedShortcut
         self.isRecordingShortcut = false
+        self.codexRunner = CodexCLIRunner()
         self.translationStatusMessage = providerReadyMessage(for: initialProvider)
     }
 
@@ -165,6 +178,19 @@ final class DiscoveryStore: ObservableObject {
 
     var selectedOpenRouterModelText: String {
         selectedOpenRouterModel.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var codexExecutablePath: String? {
+        codexRunner.executablePath
+    }
+
+    var selectedCodexModelDisplayName: String {
+        guard !selectedCodexModel.isEmpty else {
+            return "CLI Default"
+        }
+
+        return codexModels.first(where: { $0.slug == selectedCodexModel })?.displayName
+            ?? selectedCodexModel
     }
 
     var isAccessibilityGranted: Bool {
@@ -273,6 +299,16 @@ final class DiscoveryStore: ObservableObject {
         UserDefaults.standard.set(model, forKey: selectedModelKey)
         translationStatusMessage = "Selected \(model)."
         if selectedProvider == .ollama {
+            regenerateAIResponses()
+        }
+    }
+
+    func selectCodexModel(_ model: String) {
+        selectedCodexModel = model
+        UserDefaults.standard.set(model, forKey: selectedCodexModelKey)
+        codexStatusMessage = "Codex CLI model set to \(selectedCodexModelDisplayName)."
+        if selectedProvider == .codexCLI, isActiveProviderConfigured {
+            translationStatusMessage = providerReadyMessage(for: .codexCLI)
             regenerateAIResponses()
         }
     }
@@ -406,6 +442,72 @@ final class DiscoveryStore: ObservableObject {
             openRouterStatusMessage = "OpenRouter connection works with \(selectedOpenRouterModelText)."
         } catch {
             openRouterStatusMessage = "OpenRouter test failed. Check the API key, model ID, and account credits."
+        }
+    }
+
+    func refreshCodexStatusAndModels() async {
+        isCheckingCodex = true
+        codexReadiness = .checking
+        codexStatusMessage = codexReadiness.message
+        defer { isCheckingCodex = false }
+
+        let readiness = await codexRunner.checkReadiness()
+        codexReadiness = readiness
+        guard readiness.isReady else {
+            codexModels = []
+            codexStatusMessage = readiness.message
+            updateCodexProviderAfterReadinessChange()
+            return
+        }
+
+        do {
+            let models = try await codexRunner.fetchModels()
+            codexModels = models
+            let resolvedModel = CodexModelSelection.resolve(
+                saved: selectedCodexModel,
+                available: models.map(\.slug)
+            ) ?? ""
+            if resolvedModel != selectedCodexModel {
+                selectedCodexModel = resolvedModel
+                UserDefaults.standard.set(resolvedModel, forKey: selectedCodexModelKey)
+            }
+            codexStatusMessage = models.isEmpty
+                ? "Codex CLI is ready. No selectable models were returned; CLI Default remains available."
+                : "Codex CLI is ready. \(models.count) model\(models.count == 1 ? "" : "s") available."
+        } catch {
+            codexModels = []
+            selectedCodexModel = ""
+            UserDefaults.standard.set("", forKey: selectedCodexModelKey)
+            codexStatusMessage = "Codex CLI is authenticated, but model refresh failed. CLI Default remains available."
+        }
+
+        updateCodexProviderAfterReadinessChange()
+    }
+
+    func testCodexConnection() async {
+        isCheckingCodex = true
+        codexStatusMessage = "Testing Codex CLI with \(selectedCodexModelDisplayName)..."
+        defer { isCheckingCodex = false }
+
+        let readiness = await codexRunner.checkReadiness()
+        codexReadiness = readiness
+        guard readiness.isReady else {
+            codexStatusMessage = readiness.message
+            updateCodexProviderAfterReadinessChange()
+            return
+        }
+
+        do {
+            _ = try await codexRunner.generate(
+                prompt: "Reply with OK only.",
+                modelSlug: selectedCodexModel.isEmpty ? nil : selectedCodexModel
+            )
+            codexStatusMessage = "Codex CLI connection works with \(selectedCodexModelDisplayName)."
+            updateCodexProviderAfterReadinessChange()
+        } catch is CancellationError {
+            codexStatusMessage = "Codex CLI test stopped."
+        } catch {
+            codexStatusMessage = "Codex CLI test failed. Check authentication, model access, and usage limits."
         }
     }
 
@@ -753,6 +855,8 @@ final class DiscoveryStore: ObservableObject {
         switch selectedProvider {
         case .ollama:
             return selectedOllamaModel
+        case .codexCLI:
+            return "Codex CLI: \(selectedCodexModelDisplayName)"
         case .openRouter:
             return "OpenRouter: \(selectedOpenRouterModelText)"
         case .appleIntelligence:
@@ -764,6 +868,8 @@ final class DiscoveryStore: ObservableObject {
         switch selectedProvider {
         case .ollama:
             return "Could not reach Ollama. Check that the local server is running."
+        case .codexCLI:
+            return "Codex CLI request failed. Check authentication, model access, and usage limits."
         case .openRouter:
             return "OpenRouter request failed. Check the API key, model ID, and account credits."
         case .appleIntelligence:
@@ -775,6 +881,8 @@ final class DiscoveryStore: ObservableObject {
         switch provider {
         case .ollama:
             return !selectedOllamaModel.isEmpty
+        case .codexCLI:
+            return codexReadiness.isReady
         case .openRouter:
             return hasOpenRouterAPIKey && !selectedOpenRouterModelText.isEmpty
         case .appleIntelligence:
@@ -790,6 +898,8 @@ final class DiscoveryStore: ObservableObject {
         switch provider {
         case .ollama:
             return "Ready to translate with \(selectedOllamaModel)."
+        case .codexCLI:
+            return "Ready to translate with Codex CLI: \(selectedCodexModelDisplayName)."
         case .openRouter:
             return "Ready to translate with OpenRouter: \(selectedOpenRouterModelText)."
         case .appleIntelligence:
@@ -801,6 +911,8 @@ final class DiscoveryStore: ObservableObject {
         switch provider {
         case .ollama:
             return "Choose a local Ollama model to \(action)."
+        case .codexCLI:
+            return codexReadiness.isReady ? "Codex CLI is ready to \(action)." : codexReadiness.message
         case .openRouter:
             if !hasOpenRouterAPIKey {
                 return "Add an OpenRouter API key to \(action)."
@@ -815,10 +927,33 @@ final class DiscoveryStore: ObservableObject {
         switch selectedProvider {
         case .ollama:
             return try await askOllama(prompt: prompt)
+        case .codexCLI:
+            return try await codexRunner.generate(
+                prompt: prompt,
+                modelSlug: selectedCodexModel.isEmpty ? nil : selectedCodexModel
+            )
         case .openRouter:
             return try await askOpenRouter(prompt: prompt)
         case .appleIntelligence:
             return try await askAppleFoundationModel(prompt: prompt)
+        }
+    }
+
+    private func updateCodexProviderAfterReadinessChange() {
+        guard selectedProvider == .codexCLI else {
+            return
+        }
+
+        translationStatusMessage = providerReadyMessage(for: .codexCLI)
+        if codexReadiness.isReady {
+            regenerateAIResponses()
+        } else {
+            stopAIResponses()
+            germanTranslation = ""
+            selectedPhrase = nil
+            detailStatusMessage = selectedWordText == nil
+                ? "Click a word to explain it."
+                : providerMissingConfigurationMessage(for: .codexCLI, action: "explain this word")
         }
     }
 
@@ -1311,6 +1446,7 @@ struct GlobalShortcut: Equatable {
 
 enum AIProvider: String, CaseIterable, Identifiable {
     case ollama
+    case codexCLI
     case openRouter
     case appleIntelligence
 
@@ -1320,6 +1456,8 @@ enum AIProvider: String, CaseIterable, Identifiable {
         switch self {
         case .ollama:
             return "Ollama"
+        case .codexCLI:
+            return "Codex CLI"
         case .openRouter:
             return "OpenRouter"
         case .appleIntelligence:
@@ -2846,7 +2984,7 @@ struct SettingsView: View {
 
             if let modelWarning = store.activeProviderConfigurationWarning {
                 warningBox(
-                    title: store.selectedProvider == .appleIntelligence ? "Apple Intelligence is not ready" : "No model configured",
+                    title: providerWarningTitle,
                     message: modelWarning,
                     actionTitle: nil,
                     action: nil
@@ -2878,11 +3016,72 @@ struct SettingsView: View {
             switch store.selectedProvider {
             case .ollama:
                 ollamaSettings
+            case .codexCLI:
+                codexSettings
             case .openRouter:
                 openRouterSettings
             case .appleIntelligence:
                 appleIntelligenceSettings
             }
+        }
+    }
+
+    private var codexSettings: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Codex CLI sends selected text to OpenAI using your authenticated Codex account.")
+                .foregroundStyle(.secondary)
+
+            if let executablePath = store.codexExecutablePath {
+                Text("CLI: \(executablePath)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            Picker(
+                "Model",
+                selection: Binding(
+                    get: { store.selectedCodexModel },
+                    set: { store.selectCodexModel($0) }
+                )
+            ) {
+                Text("CLI Default").tag("")
+                ForEach(store.codexModels) { model in
+                    Text(model.displayName).tag(model.slug)
+                }
+            }
+            .pickerStyle(.menu)
+
+            HStack {
+                Text(store.codexStatusMessage)
+                    .font(.callout)
+                    .foregroundStyle(store.codexReadiness.isReady ? .primary : .secondary)
+                Spacer()
+                if store.isCheckingCodex {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Button("Refresh Models") {
+                        Task {
+                            await store.refreshCodexStatusAndModels()
+                        }
+                    }
+
+                    Button("Test Codex CLI") {
+                        Task {
+                            await store.testCodexConnection()
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PrototypeSurface.background)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            Text("Install Codex CLI and run `codex login` in Terminal before testing. Model discovery comes from the installed CLI and is not hard-coded in this app.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -3087,10 +3286,23 @@ struct SettingsView: View {
         switch store.selectedProvider {
         case .ollama:
             return "Ollama keeps model calls local on this Mac."
+        case .codexCLI:
+            return "Codex CLI uses OpenAI cloud models. Selected text and prompts leave this Mac."
         case .openRouter:
             return "OpenRouter uses cloud models. Selected text and prompts leave this Mac."
         case .appleIntelligence:
             return "Apple Intelligence uses Apple on-device features when this Mac is eligible and ready."
+        }
+    }
+
+    private var providerWarningTitle: String {
+        switch store.selectedProvider {
+        case .codexCLI:
+            return "Codex CLI is not ready"
+        case .appleIntelligence:
+            return "Apple Intelligence is not ready"
+        case .ollama, .openRouter:
+            return "No model configured"
         }
     }
 }

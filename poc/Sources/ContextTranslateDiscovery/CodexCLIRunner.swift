@@ -18,6 +18,15 @@ struct CodexCLIModelCatalog: Decodable {
     let models: [CodexCLIModel]
 }
 
+enum CodexModelSelection {
+    static func resolve(saved: String?, available: [String]) -> String? {
+        guard let saved, !saved.isEmpty, available.contains(saved) else {
+            return nil
+        }
+        return saved
+    }
+}
+
 enum CodexCLIUnavailableReason: Equatable {
     case notInstalled
     case notAuthenticated
@@ -198,7 +207,7 @@ struct CodexCLIRunner {
                 timeout: generationTimeout
             )
         } catch is CancellationError {
-            throw CodexCLIError.cancelled
+            throw CancellationError()
         }
 
         guard result.status == 0 else {
