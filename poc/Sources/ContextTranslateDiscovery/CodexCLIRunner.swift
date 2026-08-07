@@ -1,22 +1,122 @@
 import Darwin
 import Foundation
 
+struct CodexCLIReasoningLevel: Decodable, Equatable, Identifiable {
+    let effort: String
+    let description: String
+
+    var id: String { effort }
+}
+
+struct CodexCLIServiceTier: Decodable, Equatable, Identifiable {
+    let id: String
+    let name: String
+    let description: String
+}
+
 struct CodexCLIModel: Decodable, Equatable, Identifiable {
     let slug: String
     let displayName: String
     let visibility: String
+    let defaultReasoningLevel: String?
+    let supportedReasoningLevels: [CodexCLIReasoningLevel]
+    let serviceTiers: [CodexCLIServiceTier]
 
     var id: String { slug }
+    var priorityServiceTier: CodexCLIServiceTier? {
+        serviceTiers.first(where: { $0.id == "priority" })
+    }
+    var supportsFastMode: Bool {
+        priorityServiceTier != nil
+    }
+
+    init(
+        slug: String,
+        displayName: String,
+        visibility: String,
+        defaultReasoningLevel: String? = nil,
+        supportedReasoningLevels: [CodexCLIReasoningLevel] = [],
+        serviceTiers: [CodexCLIServiceTier] = []
+    ) {
+        self.slug = slug
+        self.displayName = displayName
+        self.visibility = visibility
+        self.defaultReasoningLevel = defaultReasoningLevel
+        self.supportedReasoningLevels = supportedReasoningLevels
+        self.serviceTiers = serviceTiers
+    }
 
     enum CodingKeys: String, CodingKey {
         case slug
         case displayName = "display_name"
         case visibility
+        case defaultReasoningLevel = "default_reasoning_level"
+        case supportedReasoningLevels = "supported_reasoning_levels"
+        case serviceTiers = "service_tiers"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        slug = try container.decode(String.self, forKey: .slug)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        visibility = try container.decode(String.self, forKey: .visibility)
+        defaultReasoningLevel = try container.decodeIfPresent(String.self, forKey: .defaultReasoningLevel)
+        supportedReasoningLevels = try container.decodeIfPresent(
+            [CodexCLIReasoningLevel].self,
+            forKey: .supportedReasoningLevels
+        ) ?? []
+        serviceTiers = try container.decodeIfPresent(
+            [CodexCLIServiceTier].self,
+            forKey: .serviceTiers
+        ) ?? []
     }
 }
 
 struct CodexCLIModelCatalog: Decodable {
     let models: [CodexCLIModel]
+}
+
+struct CodexCLIExecutionOptions: Equatable, Sendable {
+    let reasoningEffort: String?
+    let serviceTier: String?
+
+    init(reasoningEffort: String? = nil, serviceTier: String? = nil) {
+        self.reasoningEffort = reasoningEffort
+        self.serviceTier = serviceTier
+    }
+}
+
+struct CodexCLISpeedSelection: Equatable {
+    let reasoningEffort: String?
+    let fastEnabled: Bool
+
+    static func resolve(
+        reasoningEffort: String?,
+        fastEnabled: Bool,
+        model: CodexCLIModel?
+    ) -> CodexCLISpeedSelection {
+        guard let model else {
+            return CodexCLISpeedSelection(reasoningEffort: nil, fastEnabled: false)
+        }
+
+        let supportedEfforts = model.supportedReasoningLevels.map(\.effort)
+        let resolvedEffort: String?
+        if let reasoningEffort, supportedEfforts.contains(reasoningEffort) {
+            resolvedEffort = reasoningEffort
+        } else if supportedEfforts.contains("low") {
+            resolvedEffort = "low"
+        } else if let defaultEffort = model.defaultReasoningLevel,
+                  supportedEfforts.contains(defaultEffort) {
+            resolvedEffort = defaultEffort
+        } else {
+            resolvedEffort = supportedEfforts.first
+        }
+
+        return CodexCLISpeedSelection(
+            reasoningEffort: resolvedEffort,
+            fastEnabled: fastEnabled && model.supportsFastMode
+        )
+    }
 }
 
 enum CodexModelSelection {
@@ -166,8 +266,16 @@ struct CodexCLIRunner {
     }
 
     func fetchModels() async throws -> [CodexCLIModel] {
+        try await fetchModels(arguments: ["debug", "models"])
+    }
+
+    func fetchBundledModels() async throws -> [CodexCLIModel] {
+        try await fetchModels(arguments: ["debug", "models", "--bundled"])
+    }
+
+    private func fetchModels(arguments: [String]) async throws -> [CodexCLIModel] {
         let result = try await run(
-            arguments: ["debug", "models"],
+            arguments: arguments,
             standardInput: nil,
             currentDirectory: nil,
             timeout: 30
@@ -183,7 +291,11 @@ struct CodexCLIRunner {
         }
     }
 
-    func generate(prompt: String, modelSlug: String?) async throws -> String {
+    func generate(
+        prompt: String,
+        modelSlug: String?,
+        options: CodexCLIExecutionOptions = CodexCLIExecutionOptions()
+    ) async throws -> String {
         guard executableURL != nil else {
             throw CodexCLIError.notInstalled
         }
@@ -207,6 +319,18 @@ struct CodexCLIRunner {
             "--color", "never",
             "--output-last-message", outputURL.path
         ]
+        if let reasoningEffort = options.reasoningEffort, !reasoningEffort.isEmpty {
+            arguments.append(contentsOf: [
+                "-c",
+                tomlStringAssignment(key: "model_reasoning_effort", value: reasoningEffort)
+            ])
+        }
+        if let serviceTier = options.serviceTier, !serviceTier.isEmpty {
+            arguments.append(contentsOf: [
+                "-c",
+                tomlStringAssignment(key: "service_tier", value: serviceTier)
+            ])
+        }
         if let modelSlug, !modelSlug.isEmpty {
             arguments.append(contentsOf: ["--model", modelSlug])
         }
@@ -233,6 +357,13 @@ struct CodexCLIRunner {
             throw CodexCLIError.emptyOutput
         }
         return response
+    }
+
+    private func tomlStringAssignment(key: String, value: String) -> String {
+        let escapedValue = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\(key)=\"\(escapedValue)\""
     }
 
     private func run(

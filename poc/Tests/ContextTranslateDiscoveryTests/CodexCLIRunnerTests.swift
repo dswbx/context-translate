@@ -11,6 +11,17 @@ struct CodexCLIRunnerTests {
         #expect(models == [CodexCLIModel(slug: "gpt-a", displayName: "GPT A", visibility: "list")])
     }
 
+    @Test func catalogDecodesReasoningAndFastCapabilities() throws {
+        let data = Data(#"{"models":[{"slug":"gpt-fast","display_name":"GPT Fast","visibility":"list","default_reasoning_level":"medium","supported_reasoning_levels":[{"effort":"low","description":"Faster"},{"effort":"medium","description":"Balanced"}],"service_tiers":[{"id":"priority","name":"Fast","description":"1.5x speed, increased usage"}]}]}"#.utf8)
+
+        let model = try #require(CodexCLIRunner.decodeVisibleModels(from: data).first)
+
+        #expect(model.defaultReasoningLevel == "medium")
+        #expect(model.supportedReasoningLevels.map(\.effort) == ["low", "medium"])
+        #expect(model.priorityServiceTier?.name == "Fast")
+        #expect(model.supportsFastMode)
+    }
+
     @Test func resolveExecutableUsesPathBeforeFallbacks() {
         let existing = Set(["/custom/bin/codex", "/Users/test/.local/bin/codex"])
 
@@ -92,6 +103,21 @@ struct CodexCLIRunnerTests {
         #expect(models.map(\.slug) == ["gpt-a"])
     }
 
+    @Test func fetchBundledModelsSkipsLiveRefresh() async throws {
+        let fixture = try makeExecutableFixture(body: """
+        if [ "$1" = "debug" ] && [ "$2" = "models" ] && [ "$3" = "--bundled" ]; then
+          printf '%s' '{"models":[{"slug":"gpt-bundled","display_name":"GPT Bundled","visibility":"list"}]}'
+          exit 0
+        fi
+        exit 2
+        """)
+        defer { try? FileManager.default.removeItem(at: fixture.deletingLastPathComponent()) }
+
+        let models = try await CodexCLIRunner(executableURL: fixture).fetchBundledModels()
+
+        #expect(models.map(\.slug) == ["gpt-bundled"])
+    }
+
     @Test func generateReturnsOutputLastMessage() async throws {
         let fixture = try makeExecutableFixture(body: """
         if [ "$1" = "exec" ]; then
@@ -117,6 +143,79 @@ struct CodexCLIRunnerTests {
         )
 
         #expect(response == "fixture response")
+    }
+
+    @Test func generateAppliesAdjustableReasoningAndFastOptions() async throws {
+        let argumentsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("codex-arguments-\(UUID().uuidString).txt")
+        let fixture = try makeExecutableFixture(body: """
+        if [ "$1" = "exec" ]; then
+          printf '%s\n' "$@" > '\(argumentsURL.path)'
+          output=''
+          while [ "$#" -gt 0 ]; do
+            if [ "$1" = "--output-last-message" ]; then
+              shift
+              output="$1"
+            fi
+            shift
+          done
+          cat >/dev/null
+          printf '%s' 'fixture response' > "$output"
+          exit 0
+        fi
+        exit 2
+        """)
+        defer {
+            try? FileManager.default.removeItem(at: fixture.deletingLastPathComponent())
+            try? FileManager.default.removeItem(at: argumentsURL)
+        }
+
+        _ = try await CodexCLIRunner(executableURL: fixture).generate(
+            prompt: "fixture prompt",
+            modelSlug: "gpt-fast",
+            options: CodexCLIExecutionOptions(
+                reasoningEffort: "low",
+                serviceTier: "priority"
+            )
+        )
+        let arguments = try String(contentsOf: argumentsURL, encoding: .utf8)
+            .split(separator: "\n")
+            .map(String.init)
+
+        #expect(arguments.contains("model_reasoning_effort=\"low\""))
+        #expect(arguments.contains("service_tier=\"priority\""))
+        #expect(arguments.filter { $0 == "-c" }.count == 2)
+    }
+
+    @Test func generateOmitsFastTierWhenDisabled() async throws {
+        let argumentsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("codex-arguments-\(UUID().uuidString).txt")
+        let fixture = try makeExecutableFixture(body: """
+        printf '%s\n' "$@" > '\(argumentsURL.path)'
+        output=''
+        while [ "$#" -gt 0 ]; do
+          if [ "$1" = "--output-last-message" ]; then
+            shift
+            output="$1"
+          fi
+          shift
+        done
+        cat >/dev/null
+        printf '%s' 'fixture response' > "$output"
+        """)
+        defer {
+            try? FileManager.default.removeItem(at: fixture.deletingLastPathComponent())
+            try? FileManager.default.removeItem(at: argumentsURL)
+        }
+
+        _ = try await CodexCLIRunner(executableURL: fixture).generate(
+            prompt: "fixture prompt",
+            modelSlug: "gpt-fast",
+            options: CodexCLIExecutionOptions(reasoningEffort: "low", serviceTier: nil)
+        )
+        let arguments = try String(contentsOf: argumentsURL, encoding: .utf8)
+
+        #expect(!arguments.contains("service_tier"))
     }
 
     @Test func nonzeroExitBecomesSanitizedError() async throws {
@@ -220,6 +319,52 @@ struct CodexCLIRunnerTests {
         let selected = CodexModelSelection.resolve(saved: "missing", available: [])
 
         #expect(selected == nil)
+    }
+
+    @Test func speedSelectionDefaultsToLowAndPreservesSupportedFastMode() {
+        let model = CodexCLIModel(
+            slug: "gpt-fast",
+            displayName: "GPT Fast",
+            visibility: "list",
+            defaultReasoningLevel: "medium",
+            supportedReasoningLevels: [
+                CodexCLIReasoningLevel(effort: "low", description: "Faster"),
+                CodexCLIReasoningLevel(effort: "medium", description: "Balanced")
+            ],
+            serviceTiers: [
+                CodexCLIServiceTier(id: "priority", name: "Fast", description: "1.5x speed")
+            ]
+        )
+
+        let selection = CodexCLISpeedSelection.resolve(
+            reasoningEffort: "unsupported",
+            fastEnabled: true,
+            model: model
+        )
+
+        #expect(selection.reasoningEffort == "low")
+        #expect(selection.fastEnabled)
+    }
+
+    @Test func speedSelectionDisablesUnsupportedFastModeAndUsesModelDefault() {
+        let model = CodexCLIModel(
+            slug: "gpt-standard",
+            displayName: "GPT Standard",
+            visibility: "list",
+            defaultReasoningLevel: "high",
+            supportedReasoningLevels: [
+                CodexCLIReasoningLevel(effort: "high", description: "Thorough")
+            ]
+        )
+
+        let selection = CodexCLISpeedSelection.resolve(
+            reasoningEffort: "low",
+            fastEnabled: true,
+            model: model
+        )
+
+        #expect(selection.reasoningEffort == "high")
+        #expect(!selection.fastEnabled)
     }
 
     private func makeExecutableFixture(body: String) throws -> URL {

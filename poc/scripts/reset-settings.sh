@@ -5,6 +5,8 @@ KEYS=(
   "ContextDiscovery.SelectedOllamaModel"
   "ContextDiscovery.SelectedProvider"
   "ContextDiscovery.SelectedCodexModel"
+  "ContextDiscovery.CodexReasoningEffort"
+  "ContextDiscovery.CodexFastMode"
   "ContextDiscovery.SelectedOpenRouterModel"
   "ContextDiscovery.MyLanguage"
   "ContextDiscovery.TheirLanguage"

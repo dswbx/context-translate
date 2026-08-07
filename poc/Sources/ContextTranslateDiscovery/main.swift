@@ -33,6 +33,8 @@ final class DiscoveryStore: ObservableObject {
     @Published var selectedOllamaModel: String
     @Published var codexModels: [CodexCLIModel]
     @Published var selectedCodexModel: String
+    @Published var selectedCodexReasoningEffort: String
+    @Published var isCodexFastModeEnabled: Bool
     @Published var selectedOpenRouterModel: String
     @Published var openRouterAPIKeyInput: String
     @Published var myLanguage: LanguageOption
@@ -61,6 +63,8 @@ final class DiscoveryStore: ObservableObject {
     private let selectedModelKey = "ContextDiscovery.SelectedOllamaModel"
     private let selectedProviderKey = "ContextDiscovery.SelectedProvider"
     private let selectedCodexModelKey = "ContextDiscovery.SelectedCodexModel"
+    private let codexReasoningEffortKey = "ContextDiscovery.CodexReasoningEffort"
+    private let codexFastModeKey = "ContextDiscovery.CodexFastMode"
     private let selectedOpenRouterModelKey = "ContextDiscovery.SelectedOpenRouterModel"
     private let myLanguageKey = "ContextDiscovery.MyLanguage"
     private let theirLanguageKey = "ContextDiscovery.TheirLanguage"
@@ -79,6 +83,7 @@ final class DiscoveryStore: ObservableObject {
     private var lastReviewedSentence: String?
     private var cachedOpenRouterAPIKey: String?
     private var codexRunner: CodexCLIRunner
+    private var hasAttemptedBundledCodexLoad = false
     private var translationRequestID: UUID?
     private var detailRequestID: UUID?
     private var composerRequestID: UUID?
@@ -122,6 +127,8 @@ final class DiscoveryStore: ObservableObject {
         self.selectedOllamaModel = UserDefaults.standard.string(forKey: selectedModelKey) ?? ""
         self.codexModels = []
         self.selectedCodexModel = UserDefaults.standard.string(forKey: selectedCodexModelKey) ?? ""
+        self.selectedCodexReasoningEffort = UserDefaults.standard.string(forKey: codexReasoningEffortKey) ?? "low"
+        self.isCodexFastModeEnabled = UserDefaults.standard.bool(forKey: codexFastModeKey)
         self.selectedOpenRouterModel = UserDefaults.standard.string(forKey: selectedOpenRouterModelKey) ?? "openrouter/auto"
         self.openRouterAPIKeyInput = ""
         self.ollamaStatusMessage = "Ollama has not been checked yet."
@@ -195,6 +202,26 @@ final class DiscoveryStore: ObservableObject {
 
         return codexModels.first(where: { $0.slug == selectedCodexModel })?.displayName
             ?? selectedCodexModel
+    }
+
+    var selectedCodexModelConfiguration: CodexCLIModel? {
+        codexModels.first(where: { $0.slug == selectedCodexModel })
+    }
+
+    var codexReasoningLevels: [CodexCLIReasoningLevel] {
+        selectedCodexModelConfiguration?.supportedReasoningLevels ?? []
+    }
+
+    var codexSupportsFastMode: Bool {
+        selectedCodexModelConfiguration?.supportsFastMode ?? false
+    }
+
+    var codexFastModeDescription: String? {
+        selectedCodexModelConfiguration?.priorityServiceTier?.description
+    }
+
+    var selectedCodexReasoningDescription: String? {
+        codexReasoningLevels.first(where: { $0.effort == selectedCodexReasoningEffort })?.description
     }
 
     var isAccessibilityGranted: Bool {
@@ -310,11 +337,28 @@ final class DiscoveryStore: ObservableObject {
     func selectCodexModel(_ model: String) {
         selectedCodexModel = model
         UserDefaults.standard.set(model, forKey: selectedCodexModelKey)
+        reconcileCodexSpeedSettings()
         codexStatusMessage = "Codex CLI model set to \(selectedCodexModelDisplayName)."
         if selectedProvider == .codexCLI, isActiveProviderConfigured {
             translationStatusMessage = providerReadyMessage(for: .codexCLI)
             regenerateAIResponses()
         }
+    }
+
+    func selectCodexReasoningEffort(_ effort: String) {
+        selectedCodexReasoningEffort = effort
+        reconcileCodexSpeedSettings()
+        codexStatusMessage = "Codex CLI reasoning set to \(selectedCodexReasoningEffort.capitalized)."
+        regenerateCodexResponsesIfReady()
+    }
+
+    func setCodexFastModeEnabled(_ isEnabled: Bool) {
+        isCodexFastModeEnabled = isEnabled && codexSupportsFastMode
+        UserDefaults.standard.set(isCodexFastModeEnabled, forKey: codexFastModeKey)
+        codexStatusMessage = isCodexFastModeEnabled
+            ? "Codex CLI Fast mode enabled. It uses increased subscription usage."
+            : "Codex CLI Fast mode disabled."
+        regenerateCodexResponsesIfReady()
     }
 
     func selectProvider(_ provider: AIProvider) {
@@ -461,7 +505,6 @@ final class DiscoveryStore: ObservableObject {
         let readiness = await codexRunner.checkReadiness()
         codexReadiness = readiness
         guard readiness.isReady else {
-            codexModels = []
             codexStatusMessage = readiness.message
             updateCodexProviderAfterReadinessChange()
             return
@@ -469,26 +512,36 @@ final class DiscoveryStore: ObservableObject {
 
         do {
             let models = try await codexRunner.fetchModels()
-            codexModels = models
-            let resolvedModel = CodexModelSelection.resolve(
-                saved: selectedCodexModel,
-                available: models.map(\.slug)
-            ) ?? models.first?.slug ?? ""
-            if resolvedModel != selectedCodexModel {
-                selectedCodexModel = resolvedModel
-                UserDefaults.standard.set(resolvedModel, forKey: selectedCodexModelKey)
-            }
+            applyCodexModels(models)
             codexStatusMessage = models.isEmpty
                 ? "Codex CLI is ready. No selectable models were returned; CLI Default remains available."
                 : "Codex CLI is ready. \(models.count) model\(models.count == 1 ? "" : "s") available."
         } catch {
-            codexModels = []
-            selectedCodexModel = ""
-            UserDefaults.standard.set("", forKey: selectedCodexModelKey)
-            codexStatusMessage = "Codex CLI is authenticated, but model refresh failed. CLI Default remains available."
+            codexStatusMessage = codexModels.isEmpty
+                ? "Codex CLI is authenticated, but model refresh failed. CLI Default remains available."
+                : "Live model refresh failed. The bundled CLI catalog remains available."
         }
 
         updateCodexProviderAfterReadinessChange()
+    }
+
+    func loadBundledCodexModelsIfNeeded() async {
+        guard !hasAttemptedBundledCodexLoad, codexModels.isEmpty, !isCheckingCodex else {
+            return
+        }
+        hasAttemptedBundledCodexLoad = true
+        codexRunner = CodexCLIRunner()
+
+        do {
+            let models = try await codexRunner.fetchBundledModels()
+            guard codexModels.isEmpty else { return }
+            applyCodexModels(models)
+            if !models.isEmpty, !codexReadiness.isReady {
+                codexStatusMessage = "Loaded \(models.count) models from the installed CLI. Refresh to verify account availability."
+            }
+        } catch {
+            // Readiness and live Refresh provide the actionable installation error.
+        }
     }
 
     func testCodexConnection() async {
@@ -508,7 +561,8 @@ final class DiscoveryStore: ObservableObject {
         do {
             _ = try await codexRunner.generate(
                 prompt: "Reply with OK only.",
-                modelSlug: selectedCodexModel.isEmpty ? nil : selectedCodexModel
+                modelSlug: selectedCodexModel.isEmpty ? nil : selectedCodexModel,
+                options: codexExecutionOptions
             )
             codexStatusMessage = "Codex CLI connection works with \(selectedCodexModelDisplayName)."
             updateCodexProviderAfterReadinessChange()
@@ -968,13 +1022,56 @@ final class DiscoveryStore: ObservableObject {
         case .codexCLI:
             return try await codexRunner.generate(
                 prompt: prompt,
-                modelSlug: selectedCodexModel.isEmpty ? nil : selectedCodexModel
+                modelSlug: selectedCodexModel.isEmpty ? nil : selectedCodexModel,
+                options: codexExecutionOptions
             )
         case .openRouter:
             return try await askOpenRouter(prompt: prompt)
         case .appleIntelligence:
             return try await askAppleFoundationModel(prompt: prompt)
         }
+    }
+
+    private var codexExecutionOptions: CodexCLIExecutionOptions {
+        CodexCLIExecutionOptions(
+            reasoningEffort: selectedCodexReasoningEffort.isEmpty ? nil : selectedCodexReasoningEffort,
+            serviceTier: isCodexFastModeEnabled
+                ? selectedCodexModelConfiguration?.priorityServiceTier?.id
+                : nil
+        )
+    }
+
+    private func applyCodexModels(_ models: [CodexCLIModel]) {
+        codexModels = models
+        let resolvedModel = CodexModelSelection.resolve(
+            saved: selectedCodexModel,
+            available: models.map(\.slug)
+        ) ?? ""
+        if resolvedModel != selectedCodexModel {
+            selectedCodexModel = resolvedModel
+            UserDefaults.standard.set(resolvedModel, forKey: selectedCodexModelKey)
+        }
+        reconcileCodexSpeedSettings()
+    }
+
+    private func reconcileCodexSpeedSettings() {
+        let resolved = CodexCLISpeedSelection.resolve(
+            reasoningEffort: selectedCodexReasoningEffort,
+            fastEnabled: isCodexFastModeEnabled,
+            model: selectedCodexModelConfiguration
+        )
+        selectedCodexReasoningEffort = resolved.reasoningEffort ?? ""
+        isCodexFastModeEnabled = resolved.fastEnabled
+        UserDefaults.standard.set(selectedCodexReasoningEffort, forKey: codexReasoningEffortKey)
+        UserDefaults.standard.set(isCodexFastModeEnabled, forKey: codexFastModeKey)
+    }
+
+    private func regenerateCodexResponsesIfReady() {
+        guard selectedProvider == .codexCLI, isActiveProviderConfigured else {
+            return
+        }
+        translationStatusMessage = providerReadyMessage(for: .codexCLI)
+        regenerateAIResponses()
     }
 
     private func updateCodexProviderAfterReadinessChange() {
@@ -3090,6 +3187,47 @@ struct SettingsView: View {
             }
             .pickerStyle(.menu)
 
+            if !store.codexReasoningLevels.isEmpty {
+                Picker(
+                    "Reasoning",
+                    selection: Binding(
+                        get: { store.selectedCodexReasoningEffort },
+                        set: { store.selectCodexReasoningEffort($0) }
+                    )
+                ) {
+                    ForEach(store.codexReasoningLevels) { level in
+                        Text(level.effort.capitalized).tag(level.effort)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                if let description = store.selectedCodexReasoningDescription {
+                    Text(description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if store.codexSupportsFastMode {
+                Toggle(
+                    "Fast mode",
+                    isOn: Binding(
+                        get: { store.isCodexFastModeEnabled },
+                        set: { store.setCodexFastModeEnabled($0) }
+                    )
+                )
+
+                if let description = store.codexFastModeDescription {
+                    Text(description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else if !store.selectedCodexModel.isEmpty {
+                Text("Fast mode is not advertised for this model by the installed CLI.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             HStack {
                 Text(store.codexStatusMessage)
                     .font(.callout)
@@ -3120,6 +3258,9 @@ struct SettingsView: View {
             Text("Install Codex CLI and run `codex login` in Terminal before testing. Model discovery comes from the installed CLI and is not hard-coded in this app.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+        .task {
+            await store.loadBundledCodexModelsIfNeeded()
         }
     }
 
