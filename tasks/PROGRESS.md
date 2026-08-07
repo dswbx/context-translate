@@ -424,3 +424,12 @@ Chronological log of meaningful work. Agents must update this before ending a se
 **Checks run:** 23 Swift tests and Swift build using the full Xcode toolchain with an isolated SwiftPM scratch path; `bash -n poc/scripts/reset-settings.sh`; `git diff --check`; live installed-CLI catalog and configuration probes; independent implementation review.
 **Decisions made:** Prefer Low reasoning and capability-gated Fast over the experimental persistent app-server. Use `debug models --bundled` for immediate Settings data and keep explicit live Refresh for current account availability.
 **Next step:** Package and run the POC, then compare Codex response latency across Low/Medium and Fast on/off for the same Explain and Composer inputs.
+
+## 2026-08-07 - Shortened Menu-Bar Label
+
+**Task:** TASK-003
+**Summary:** Changed the visible menu-bar status-item label from `Translator` to `T` while retaining the descriptive Settings toggle copy.
+**Files changed:** `poc/Sources/ContextTranslateDiscovery/main.swift`, `poc/README.md`, `tasks/CURRENT.md`, `tasks/PROGRESS.md`
+**Checks run:** Swift build with the full Xcode toolchain; `git diff --check`.
+**Decisions made:** Use the compact `T` only for the constrained menu-bar surface.
+**Next step:** Confirm the packaged app displays `T` in the menu bar.

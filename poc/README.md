@@ -41,7 +41,7 @@ swift run
 Expected behavior:
 
 - On first launch, the app opens Settings.
-- The app appears in the macOS menu bar as `Translator`, unless disabled in Settings.
+- The app appears in the macOS menu bar as `T`, unless disabled in Settings.
 - Choosing `Open Assistant` opens a floating assistant panel.
 - Pressing `Command+Option+E` opens a floating bubble near the current selection when possible.
 - The app tries Accessibility selection first, then temporary copy-restore, then clipboard fallback.

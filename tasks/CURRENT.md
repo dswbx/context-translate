@@ -24,4 +24,4 @@ The POC builds and runs via `swift run` in `poc/`, but permission-dependent capt
 
 ## Handoff Notes
 
-Verify the first-launch Settings flow, menu-bar visibility toggle, Accessibility/model warnings, recorded shortcut behavior, `Command+W` close behavior, selected-term context translations, Codex CLI readiness/model/generation behavior, and Apple Intelligence readiness/generation behavior in the running POC.
+Verify the first-launch Settings flow, compact `T` menu-bar label and visibility toggle, Accessibility/model warnings, recorded shortcut behavior, `Command+W` close behavior, selected-term context translations, Codex CLI readiness/model/generation behavior, and Apple Intelligence readiness/generation behavior in the running POC.

@@ -3891,12 +3891,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @MainActor
     private func setupMenuBar() {
         guard statusItem == nil else {
-            statusItem?.button?.title = "Translator"
+            statusItem?.button?.title = "T"
             return
         }
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = "Translator"
+        item.button?.title = "T"
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Open Assistant", action: #selector(openAssistant), keyEquivalent: "e"))
